@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.log
+screenshot*.png
+demo/
+crop*.png
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db

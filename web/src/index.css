@@ -1,0 +1,384 @@
+:root {
+  --bg: #2a1a12;
+  --panel: #f4e8cc;
+  --panel-2: #e8d8b4;
+  --line: #8a5a3b;
+  --line-soft: #c3a878;
+  --text: #33200f;
+  --muted: #7a614a;
+  --gold: #c98a1e;
+  --gold-bright: #e8b23a;
+  --maroon: #8c2f2f;
+  --green: #2e7d5b;
+  --red: #b3342f;
+  --blue: #2f5f88;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.app {
+  --top1: #a63a3a;
+  --top2: #7d2427;
+  --top-border: #4b1414;
+  --top-ink: #f9ecc9;
+  --top-sub: #f3d9b0cc;
+  --gold-text: #ffe08a;
+  --sel-bg: #ffe9a8;
+  --sel-bar: #8c2f2f;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+}
+
+.app[data-theme="rubi"] {
+  --top1: #3f5f9e;
+  --top2: #2b4373;
+  --top-border: #16264a;
+  --top-ink: #e8f0ff;
+  --top-sub: #cfe0ffcc;
+  --gold-text: #bfe0ff;
+  --sel-bg: #dce8ff;
+  --sel-bar: #3f5f9e;
+}
+
+.app[data-theme="esmeralda"] {
+  --top1: #2f7a5a;
+  --top2: #1f5a40;
+  --top-border: #103a28;
+  --top-ink: #e6f7ec;
+  --top-sub: #c9ecd8cc;
+  --gold-text: #c9f0d8;
+  --sel-bg: #d8f2e2;
+  --sel-bar: #2f7a5a;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 18px;
+  background: linear-gradient(180deg, var(--top1), var(--top2));
+  border-bottom: 4px solid var(--top-border);
+  box-shadow: inset 0 2px 0 #ffffff2e, inset 0 -2px 0 #00000033;
+  flex: 0 0 auto;
+  color: var(--top-ink);
+}
+
+.topbar h1 {
+  font-size: 16px;
+  letter-spacing: 2px;
+  margin: 0;
+  color: var(--gold-text);
+  text-shadow: 2px 2px 0 var(--top-border);
+}
+
+.topbar .sub {
+  font-size: 11px;
+  color: var(--top-sub);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.pill {
+  font-size: 11px;
+  padding: 4px 9px;
+  border: 2px solid var(--top-border);
+  background: #f4e8cc;
+  color: #5b3520;
+  box-shadow: inset 0 -2px 0 #d9c69c;
+}
+
+.pill b {
+  color: #33200f;
+}
+
+.theme-btn {
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 1px;
+}
+
+.theme-btn:hover {
+  background: #ffe9a8;
+}
+
+.theme-btn:active {
+  transform: translateY(1px);
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  background: #37a06a;
+  box-shadow: 0 0 0 2px #1d5c3c;
+}
+
+.dot.warn {
+  background: var(--gold-bright);
+  box-shadow: 0 0 0 2px #7a5a12;
+}
+
+.dot.off {
+  background: #d05050;
+  box-shadow: 0 0 0 2px #6d1f22;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.office {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  background: radial-gradient(circle at 50% 35%, #202020, #0f0f0f 75%);
+  border-right: 4px solid var(--top-border);
+}
+
+.office canvas {
+  display: block;
+  cursor: pointer;
+  image-rendering: pixelated;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #f4e8cc;
+  text-align: center;
+  pointer-events: none;
+}
+
+.empty h2 {
+  color: #f9f4e8;
+  background: #1f2430;
+  border: 2px solid #0f1116;
+  font-size: 16px;
+  margin: 0;
+  padding: 10px 18px;
+  box-shadow: 0 4px 0 #0f1116;
+}
+
+.empty code {
+  background: #f4e8cc;
+  border: 2px solid #8a5a3b;
+  padding: 2px 6px;
+  color: #6d1f22;
+}
+
+.empty > div {
+  background: #1f2430d9;
+  color: #eee8dc;
+  border: 1px solid #0f1116;
+  padding: 5px 12px;
+}
+
+.side {
+  width: 320px;
+  flex: 0 0 320px;
+  background: #f7ecd3;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 4px solid var(--top-border);
+}
+
+.side h3 {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--top-ink);
+  margin: 0;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, var(--top1), var(--top2));
+  border-bottom: 3px solid var(--top-border);
+  text-transform: uppercase;
+}
+
+.list {
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 80px;
+  background: #f7ecd3;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 2px solid #e2d0a8;
+  cursor: pointer;
+  color: #33200f;
+}
+
+.row:hover {
+  background: #efe0bd;
+}
+
+.row.sel {
+  background: var(--sel-bg);
+  box-shadow: inset 4px 0 0 var(--sel-bar);
+}
+
+.row .name {
+  flex: 1;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row .tag {
+  font-size: 10px;
+  color: #8a6a3a;
+}
+
+.chip {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border: 2px solid #4b3418;
+}
+
+.chip.busy {
+  background: #37a06a;
+  animation: pulse 1s infinite alternate;
+}
+
+.chip.idle {
+  background: #b8a888;
+}
+
+.chip.retry {
+  background: var(--gold-bright);
+  animation: pulse 0.6s infinite alternate;
+}
+
+.chip.error {
+  background: #d05050;
+  animation: pulse 0.5s infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.detail {
+  border-top: 4px solid var(--top-border);
+  padding: 12px;
+  flex: 0 0 auto;
+  max-height: 55%;
+  overflow: auto;
+  font-size: 11px;
+  background: #fbf3e0;
+}
+
+.detail .title {
+  font-size: 13px;
+  color: var(--sel-bar);
+  margin-bottom: 8px;
+  word-break: break-word;
+  font-weight: bold;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 4px 8px;
+  color: var(--muted);
+}
+
+.kv b {
+  color: var(--text);
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.tool {
+  margin-top: 10px;
+  padding: 8px;
+  border: 2px solid #b9c9d8;
+  background: #e8f0f6;
+  color: #2f5f88;
+  word-break: break-word;
+}
+
+.warnbox {
+  margin-top: 10px;
+  padding: 8px;
+  border: 2px solid #c98a1e;
+  background: #ffeab8;
+  color: #7a4a12;
+}
+
+.errbox {
+  margin-top: 6px;
+  padding: 8px;
+  border: 2px solid #b3342f;
+  background: #ffe0dd;
+  color: #8c2f2f;
+}
+
+.hint {
+  color: #7a614a;
+  padding: 12px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.hint code {
+  color: #6d1f22;
+}
+
+.office::-webkit-scrollbar,
+.list::-webkit-scrollbar,
+.detail::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.office::-webkit-scrollbar-track,
+.list::-webkit-scrollbar-track,
+.detail::-webkit-scrollbar-track {
+  background: #e2d0a8;
+}
+
+.office::-webkit-scrollbar-thumb,
+.list::-webkit-scrollbar-thumb,
+.detail::-webkit-scrollbar-thumb {
+  background: #8a5a3b;
+  border: 2px solid #4b3418;
+}
