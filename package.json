@@ -12,7 +12,8 @@
     "probe": "tsx scripts/probe.ts",
     "clean-demo": "tsx scripts/clean-demo.ts",
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit && vite build",
+    "check:encoding": "node scripts/utf8-check.mjs",
+    "build": "tsc --noEmit && vite build && tsc -p tsconfig.server.json",
     "build:server": "tsc -p tsconfig.server.json",
     "start": "node dist/server/index.js"
   },

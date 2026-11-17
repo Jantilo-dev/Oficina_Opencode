@@ -115,3 +115,16 @@ export function subscribe(
   };
   return () => source.close();
 }
+
+export async function fetchLayout(): Promise<unknown | null> {
+  const data = await json<{ layout: unknown | null }>("/api/layout");
+  return data.layout ?? null;
+}
+
+export async function saveLayout(layout: unknown): Promise<void> {
+  await json("/api/layout", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(layout)
+  });
+}

@@ -46,50 +46,84 @@ export const SEATS: Seat[] = WORKSTATIONS.map((workstation, index) => ({
   workstation
 }));
 
+export type SeatRole = "plan" | "frontend" | "backend" | "qa" | "docs";
+export type SeatOption = { index: number; area: string; label: string; role?: SeatRole };
+
+const ROLE_LABELS: Record<SeatRole, string> = {
+  plan: "PLANIFICACIÓN (JEFE)",
+  frontend: "FRONTEND",
+  backend: "BACKEND",
+  qa: "QA",
+  docs: "DOCUMENTACIÓN"
+};
+
+const SEAT_GROUPS: Array<{ area: string; from: number; roles?: SeatRole[]; count?: number }> = [
+  { area: "AREA INTRANET", from: 0, roles: ["plan", "frontend", "backend", "qa", "docs"] },
+  { area: "AREA LOGÍSTICA", from: 5, roles: ["plan", "frontend", "backend", "qa", "docs"] },
+  { area: "AREA SOPORTE", from: 10, roles: ["plan", "frontend", "backend", "qa", "docs"] },
+  { area: "AREA PORTAL", from: 15, roles: ["plan", "frontend", "backend", "qa", "docs"] },
+  { area: "GERENCIA", from: 20, count: 2 },
+  { area: "OFICINA 2", from: 22, count: 2 },
+  { area: "OFICINA 3", from: 24, count: 2 },
+  { area: "OFICINA 4", from: 26, count: 2 },
+  { area: "OFICINA 5", from: 28, count: 2 },
+  { area: "OFICINA 6", from: 30, count: 2 }
+];
+
+export const SEAT_OPTIONS: SeatOption[] = SEAT_GROUPS.flatMap(({ area, from, roles, count }) => {
+  const length = roles?.length ?? count ?? 0;
+  return Array.from({ length }, (_, offset) => {
+    const index = from + offset;
+    const role = roles?.[offset];
+    const label = role ? `${area} · ${ROLE_LABELS[role]}` : `${area} · ${offset + 1} (${index + 1})`;
+    return role ? { index, area, label, role } : { index, area, label };
+  });
+});
+
 export function makeSpot(id: string, x: number, y: number, kind: SpotKind, gender?: "male" | "female"): Spot {
   return { id, x, y, kind, gender };
 }
 
 export const MEETING_SPOTS: Spot[] = [
-  makeSpot("meeting-0", 470, 720, "meeting"),
-  makeSpot("meeting-1", 540, 720, "meeting"),
-  makeSpot("meeting-2", 610, 720, "meeting"),
-  makeSpot("meeting-3", 680, 720, "meeting"),
-  makeSpot("meeting-4", 500, 920, "meeting"),
-  makeSpot("meeting-5", 570, 920, "meeting"),
-  makeSpot("meeting-6", 640, 920, "meeting"),
-  makeSpot("meeting-7", 710, 920, "meeting")
+  makeSpot("meeting-0", 610, 1100, "meeting"),
+  makeSpot("meeting-1", 680, 1100, "meeting"),
+  makeSpot("meeting-2", 750, 1100, "meeting"),
+  makeSpot("meeting-3", 820, 1100, "meeting"),
+  makeSpot("meeting-4", 640, 1300, "meeting"),
+  makeSpot("meeting-5", 710, 1300, "meeting"),
+  makeSpot("meeting-6", 780, 1300, "meeting"),
+  makeSpot("meeting-7", 850, 1300, "meeting")
 ];
 
 export const HALL_AND_CORRIDOR_SPOTS: Spot[] = [
   ...HALL_SPOTS.slice(4).map((spot, index) => makeSpot(`hall-${index}`, spot.x, spot.y, "hall")),
-  makeSpot("hall-6", 880, 780, "hall"),
-  makeSpot("hall-7", 900, 910, "hall"),
-  makeSpot("hall-8", 1100, 800, "hall"),
-  makeSpot("hall-9", 1150, 880, "hall"),
-  makeSpot("hall-10", 1000, 675, "hall"),
-  makeSpot("hall-11", 1100, 700, "hall"),
-  makeSpot("hall-12", 1180, 900, "hall"),
-  makeSpot("hall-13", 940, 690, "hall"),
-  makeSpot("corridor-0", 415, 280, "corridor"),
-  makeSpot("corridor-1", 415, 500, "corridor"),
-  makeSpot("corridor-2", 415, 700, "corridor"),
-  makeSpot("corridor-3", 415, 880, "corridor"),
-  makeSpot("corridor-4", 815, 280, "corridor"),
-  makeSpot("corridor-5", 815, 500, "corridor"),
-  makeSpot("corridor-6", 815, 700, "corridor"),
-  makeSpot("corridor-7", 815, 880, "corridor")
+  makeSpot("hall-6", 1160, 780, "hall"),
+  makeSpot("hall-7", 1180, 910, "hall"),
+  makeSpot("hall-8", 1380, 800, "hall"),
+  makeSpot("hall-9", 1430, 880, "hall"),
+  makeSpot("hall-10", 1280, 675, "hall"),
+  makeSpot("hall-11", 1380, 700, "hall"),
+  makeSpot("hall-12", 1460, 900, "hall"),
+  makeSpot("hall-13", 1220, 690, "hall"),
+  makeSpot("corridor-0", 570, 280, "corridor"),
+  makeSpot("corridor-1", 570, 500, "corridor"),
+  makeSpot("corridor-2", 570, 700, "corridor"),
+  makeSpot("corridor-3", 570, 880, "corridor"),
+  makeSpot("corridor-4", 1130, 280, "corridor"),
+  makeSpot("corridor-5", 1130, 500, "corridor"),
+  makeSpot("corridor-6", 1130, 700, "corridor"),
+  makeSpot("corridor-7", 1130, 880, "corridor")
 ];
 
 export const BREAK_SPOTS: Spot[] = [
   ...CAFE_SPOTS.map((spot, index) => makeSpot(`cafe-${index}`, spot.x, spot.y, "break")),
-  makeSpot("water-0", 150, 790, "break"),
-  makeSpot("water-1", 250, 880, "break"),
-  makeSpot("water-2", 320, 900, "break"),
-  makeSpot("bath-0", 940, 380, "break", "male"),
-  makeSpot("bath-1", 1010, 380, "break", "male"),
-  makeSpot("bath-2", 1080, 380, "break", "female"),
-  makeSpot("bath-3", 1160, 380, "break", "female")
+  makeSpot("water-0", 150, 1170, "break"),
+  makeSpot("water-1", 250, 1260, "break"),
+  makeSpot("water-2", 320, 1280, "break"),
+  makeSpot("bath-0", 1242, 560, "break", "male"),
+  makeSpot("bath-1", 1312, 560, "break", "male"),
+  makeSpot("bath-2", 1362, 560, "break", "female"),
+  makeSpot("bath-3", 1442, 560, "break", "female")
 ];
 
 export const STANDING_SPOTS: Spot[] = [...HALL_AND_CORRIDOR_SPOTS];
@@ -97,7 +131,7 @@ export const STANDING_SPOTS: Spot[] = [...HALL_AND_CORRIDOR_SPOTS];
 export function overflowSpot(index: number): Point {
   const columns = 16;
   return {
-    x: 858 + (index % columns) * 24,
+    x: 1160 + (index % columns) * 24,
     y: 646 + Math.floor(index / columns) * 20
   };
 }

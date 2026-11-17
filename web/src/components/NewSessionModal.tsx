@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { AgentInfo, ModelInfo } from "../types";
+import ErrorBox from "./ErrorBox";
 
 const INTERNAL = new Set(["compaction", "summary", "title"]);
 
@@ -189,7 +190,7 @@ export default function NewSessionModal({ agents, models, onClose, onCreate }: P
             su configuración. Revisa los badges de cada tarjeta.
           </div>
 
-          {error && <div className="errbox">{error}</div>}
+          {error && <ErrorBox message={error} />}
         </div>
 
         <footer className="modal-foot">

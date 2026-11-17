@@ -301,10 +301,16 @@ export async function fetchBootstrap(): Promise<Bootstrap> {
     request<Record<string, SessionStatus>>(`/session/status${query}`).catch(() => ({}))
   ]);
 
-  const limited = sessions.slice(0, 60);
-  const metas = await mapLimit(limited, 6, (session) => fetchMeta(session.id, query, session.time.updated));
+  const byId = new Map(sessions.map((session) => [session.id, session]));
+  const now = Date.now();
+  const relevant = sessions.filter((session) => {
+    if (!session.parentID || !byId.has(session.parentID)) return true;
+    const status = (statuses as Record<string, SessionStatus>)[session.id]?.type;
+    return status === "busy" || status === "retry" || now - session.time.updated < 10 * 60 * 1000;
+  });
+  const metas = await mapLimit(relevant, 6, (session) => fetchMeta(session.id, query, session.time.updated));
   const meta: Record<string, SessionMeta> = {};
-  limited.forEach((session, index) => {
+  relevant.forEach((session, index) => {
     const value = metas[index];
     if (value) meta[session.id] = value;
   });

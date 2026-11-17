@@ -31,52 +31,64 @@ export type Cubicle = { x: number; y: number; w: number; h: number; seatX: numbe
 export type Workstation = { kind: "cubicle"; cubicle: Cubicle; seatX: number; seatY: number };
 
 export const AREAS = [
-  { id: "intranet", label: "AREA INTRANET", x: 30, y: 160, w: 360, h: 250 },
-  { id: "logistica", label: "AREA LOGÍSTICA", x: 30, y: 420, w: 360, h: 230 },
-  { id: "cocina", label: "COCINA", x: 30, y: 660, w: 360, h: 290 },
-  { id: "soporte", label: "AREA SOPORTE", x: 440, y: 160, w: 350, h: 250 },
-  { id: "portal", label: "AREA PORTAL", x: 440, y: 420, w: 350, h: 230 },
-  { id: "reuniones", label: "SALA DE REUNIONES", x: 440, y: 660, w: 350, h: 290 },
-  { id: "pasillo", label: "PASILLO", x: 840, y: 625, w: 410, h: 325 },
-  { id: "gerencia", label: "GERENCIA", x: 30, y: 1040, w: 380, h: 230 },
-  { id: "oficina2", label: "OFICINA 2", x: 450, y: 1040, w: 380, h: 230 },
-  { id: "oficina3", label: "OFICINA 3", x: 870, y: 1040, w: 380, h: 230 },
-  { id: "oficina4", label: "OFICINA 4", x: 30, y: 1340, w: 380, h: 230 },
-  { id: "oficina5", label: "OFICINA 5", x: 450, y: 1340, w: 380, h: 230 },
-  { id: "oficina6", label: "OFICINA 6", x: 870, y: 1340, w: 380, h: 230 }
+  { id: "intranet", label: "AREA INTRANET", x: 30, y: 160, w: 520, h: 420 },
+  { id: "logistica", label: "AREA LOGÍSTICA", x: 30, y: 580, w: 520, h: 420 },
+  { id: "cocina", label: "COCINA", x: 30, y: 1020, w: 520, h: 310 },
+  { id: "soporte", label: "AREA SOPORTE", x: 590, y: 160, w: 520, h: 420 },
+  { id: "portal", label: "AREA PORTAL", x: 590, y: 580, w: 520, h: 420 },
+  { id: "reuniones", label: "SALA DE REUNIONES", x: 590, y: 1020, w: 520, h: 310 },
+  { id: "pasillo", label: "PASILLO", x: 1150, y: 625, w: 420, h: 705 },
+  { id: "gerencia", label: "GERENCIA", x: 30, y: 1420, w: 520, h: 230 },
+  { id: "oficina2", label: "OFICINA 2", x: 590, y: 1420, w: 520, h: 230 },
+  { id: "oficina3", label: "OFICINA 3", x: 1150, y: 1420, w: 420, h: 230 },
+  { id: "oficina4", label: "OFICINA 4", x: 30, y: 1720, w: 520, h: 230 },
+  { id: "oficina5", label: "OFICINA 5", x: 590, y: 1720, w: 520, h: 230 },
+  { id: "oficina6", label: "OFICINA 6", x: 1150, y: 1720, w: 420, h: 230 }
 ] as const;
 
 export const CUBICLES: Cubicle[] = [
-  { x: 50, y: 232, w: 160, h: 168, seatX: 108, seatY: 356 },
-  { x: 215, y: 232, w: 160, h: 168, seatX: 273, seatY: 356 },
-  { x: 50, y: 462, w: 160, h: 168, seatX: 108, seatY: 586 },
-  { x: 215, y: 462, w: 160, h: 168, seatX: 273, seatY: 586 },
-  { x: 455, y: 232, w: 160, h: 168, seatX: 513, seatY: 356 },
-  { x: 615, y: 232, w: 160, h: 168, seatX: 673, seatY: 356 },
-  { x: 455, y: 462, w: 160, h: 168, seatX: 513, seatY: 586 },
-  { x: 615, y: 462, w: 160, h: 168, seatX: 673, seatY: 586 }
+  { x: 50, y: 210, w: 160, h: 168, seatX: 108, seatY: 334 },
+  { x: 216, y: 210, w: 160, h: 168, seatX: 274, seatY: 334 },
+  { x: 382, y: 210, w: 160, h: 168, seatX: 440, seatY: 334 },
+  { x: 70, y: 400, w: 160, h: 168, seatX: 128, seatY: 524 },
+  { x: 310, y: 400, w: 160, h: 168, seatX: 368, seatY: 524 },
+  { x: 50, y: 630, w: 160, h: 168, seatX: 108, seatY: 754 },
+  { x: 216, y: 630, w: 160, h: 168, seatX: 274, seatY: 754 },
+  { x: 382, y: 630, w: 160, h: 168, seatX: 440, seatY: 754 },
+  { x: 70, y: 820, w: 160, h: 168, seatX: 128, seatY: 944 },
+  { x: 310, y: 820, w: 160, h: 168, seatX: 368, seatY: 944 },
+  { x: 610, y: 210, w: 160, h: 168, seatX: 668, seatY: 334 },
+  { x: 776, y: 210, w: 160, h: 168, seatX: 834, seatY: 334 },
+  { x: 942, y: 210, w: 160, h: 168, seatX: 1000, seatY: 334 },
+  { x: 630, y: 400, w: 160, h: 168, seatX: 688, seatY: 524 },
+  { x: 870, y: 400, w: 160, h: 168, seatX: 928, seatY: 524 },
+  { x: 610, y: 630, w: 160, h: 168, seatX: 668, seatY: 754 },
+  { x: 776, y: 630, w: 160, h: 168, seatX: 834, seatY: 754 },
+  { x: 942, y: 630, w: 160, h: 168, seatX: 1000, seatY: 754 },
+  { x: 630, y: 820, w: 160, h: 168, seatX: 688, seatY: 944 },
+  { x: 870, y: 820, w: 160, h: 168, seatX: 928, seatY: 944 }
 ];
 
 export const CUBICLES2: Cubicle[] = [
-  { x: 55, y: 1085, w: 160, h: 168, seatX: 113, seatY: 1209 },
-  { x: 225, y: 1085, w: 160, h: 168, seatX: 283, seatY: 1209 },
-  { x: 475, y: 1085, w: 160, h: 168, seatX: 533, seatY: 1209 },
-  { x: 645, y: 1085, w: 160, h: 168, seatX: 703, seatY: 1209 },
-  { x: 895, y: 1085, w: 160, h: 168, seatX: 953, seatY: 1209 },
-  { x: 1065, y: 1085, w: 160, h: 168, seatX: 1123, seatY: 1209 },
-  { x: 55, y: 1385, w: 160, h: 168, seatX: 113, seatY: 1509 },
-  { x: 225, y: 1385, w: 160, h: 168, seatX: 283, seatY: 1509 },
-  { x: 475, y: 1385, w: 160, h: 168, seatX: 533, seatY: 1509 },
-  { x: 645, y: 1385, w: 160, h: 168, seatX: 703, seatY: 1509 },
-  { x: 895, y: 1385, w: 160, h: 168, seatX: 953, seatY: 1509 },
-  { x: 1065, y: 1385, w: 160, h: 168, seatX: 1123, seatY: 1509 }
+  { x: 110, y: 1465, w: 160, h: 168, seatX: 168, seatY: 1589 },
+  { x: 280, y: 1465, w: 160, h: 168, seatX: 338, seatY: 1589 },
+  { x: 670, y: 1465, w: 160, h: 168, seatX: 728, seatY: 1589 },
+  { x: 840, y: 1465, w: 160, h: 168, seatX: 898, seatY: 1589 },
+  { x: 1190, y: 1465, w: 160, h: 168, seatX: 1248, seatY: 1589 },
+  { x: 1360, y: 1465, w: 160, h: 168, seatX: 1418, seatY: 1589 },
+  { x: 110, y: 1765, w: 160, h: 168, seatX: 168, seatY: 1889 },
+  { x: 280, y: 1765, w: 160, h: 168, seatX: 338, seatY: 1889 },
+  { x: 670, y: 1765, w: 160, h: 168, seatX: 728, seatY: 1889 },
+  { x: 840, y: 1765, w: 160, h: 168, seatX: 898, seatY: 1889 },
+  { x: 1190, y: 1765, w: 160, h: 168, seatX: 1248, seatY: 1889 },
+  { x: 1360, y: 1765, w: 160, h: 168, seatX: 1418, seatY: 1889 }
 ];
 
 export const MANAGER_SEAT = CUBICLES.length;
 
-export const ENTRANCE = { x: 1228, y: 820 };
+export const ENTRANCE = { x: 1548, y: 820 };
 
-export const RECEPTION_DESK = { x: 1100, y: 825, w: 120, h: 50, seatX: 1160, seatY: 812 };
+export const RECEPTION_DESK = { x: 1420, y: 825, w: 120, h: 50, seatX: 1480, seatY: 812 };
 
 export const WORKSTATIONS: Workstation[] = [
   ...CUBICLES.map((cubicle) => ({
@@ -94,10 +106,10 @@ export const WORKSTATIONS: Workstation[] = [
 ];
 
 export const CAFE_SPOTS = [
-  { x: 130, y: 900 },
-  { x: 210, y: 900 },
-  { x: 290, y: 900 },
-  { x: 160, y: 875 }
+  { x: 130, y: 1280 },
+  { x: 210, y: 1280 },
+  { x: 290, y: 1280 },
+  { x: 160, y: 1255 }
 ];
 
 export const HALL_SPOTS = [
@@ -105,8 +117,8 @@ export const HALL_SPOTS = [
   { x: 570, y: 920 },
   { x: 640, y: 920 },
   { x: 710, y: 920 },
-  { x: 930, y: 880 },
-  { x: 1010, y: 880 }
+  { x: 1210, y: 880 },
+  { x: 1290, y: 880 }
 ];
 
 const SKINS = ["#f2c6a0", "#e8b98f", "#d79a6a", "#b97a4e", "#8d5a38"];
@@ -413,96 +425,126 @@ function drawCorridor(ctx: Ctx, x1: number, x2: number, y1: number, y2: number) 
 
 function drawCorridors(ctx: Ctx) {
   for (const [x1, x2] of [
-    [390, 440],
-    [790, 840]
+    [550, 590],
+    [1110, 1150]
   ]) {
-    drawCorridor(ctx, x1, x2, 150, 950);
+    drawCorridor(ctx, x1, x2, 150, 1330);
   }
-  drawCorridor(ctx, 30, 1240, 980, 1030);
-  drawCorridor(ctx, 410, 450, 980, 1620);
-  drawCorridor(ctx, 830, 870, 980, 1620);
-  drawCorridor(ctx, 30, 1240, 1270, 1330);
-  drawCorridor(ctx, 30, 1240, 1570, 1620);
+  drawCorridor(ctx, 30, 1560, 1360, 1410);
+  drawCorridor(ctx, 550, 590, 1360, 2000);
+  drawCorridor(ctx, 1110, 1150, 1360, 2000);
+  drawCorridor(ctx, 30, 1560, 1650, 1710);
+  drawCorridor(ctx, 30, 1560, 1950, 2000);
 }
 
 function drawRooms(ctx: Ctx) {
-  drawWall(ctx, 18, 150, 12, 1470);
-  drawWall(ctx, 1250, 150, 12, 1470);
-  hWall(ctx, 950, 18, 1262, [[610, 668]]);
-  drawWall(ctx, 30, 962, 580, 18);
-  drawWall(ctx, 668, 962, 572, 18);
-  drawWall(ctx, 18, 1620, 1244, 12);
+  drawWall(ctx, 18, 150, 12, 1850);
+  drawWall(ctx, 1570, 150, 12, 1850);
+  hWall(ctx, 1330, 18, 1582, [
+    [550, 590],
+    [1110, 1150],
+    [1230, 1270]
+  ]);
+  drawWall(ctx, 30, 1342, 520, 18);
+  drawWall(ctx, 590, 1342, 520, 18);
+  drawWall(ctx, 1150, 1342, 80, 18);
+  drawWall(ctx, 1270, 1342, 300, 18);
+  drawWall(ctx, 18, 2000, 1552, 12);
 
-  hWall(ctx, 1040, 30, 410, []);
-  hWall(ctx, 1040, 450, 830, []);
-  hWall(ctx, 1040, 870, 1250, []);
-  hWall(ctx, 1270, 30, 410, [[200, 240]]);
-  hWall(ctx, 1270, 450, 830, [[620, 660]]);
-  hWall(ctx, 1270, 870, 1250, [[1040, 1080]]);
-  hWall(ctx, 1340, 30, 410, []);
-  hWall(ctx, 1340, 450, 830, []);
-  hWall(ctx, 1340, 870, 1250, []);
-  hWall(ctx, 1570, 30, 410, [[200, 240]]);
-  hWall(ctx, 1570, 450, 830, [[620, 660]]);
-  hWall(ctx, 1570, 870, 1250, [[1040, 1080]]);
+  hWall(ctx, 1420, 30, 550, []);
+  hWall(ctx, 1420, 590, 1110, []);
+  hWall(ctx, 1420, 1150, 1570, []);
+  hWall(ctx, 1650, 30, 550, [[250, 330]]);
+  hWall(ctx, 1650, 590, 1110, [[810, 890]]);
+  hWall(ctx, 1650, 1150, 1570, [[1320, 1400]]);
+  hWall(ctx, 1720, 30, 550, []);
+  hWall(ctx, 1720, 590, 1110, []);
+  hWall(ctx, 1720, 1150, 1570, []);
+  hWall(ctx, 1950, 30, 550, [[250, 330]]);
+  hWall(ctx, 1950, 590, 1110, [[810, 890]]);
+  hWall(ctx, 1950, 1150, 1570, [[1320, 1400]]);
 
-  vWall(ctx, 30, 1040, 1270, []);
-  vWall(ctx, 410, 1040, 1270, []);
-  vWall(ctx, 450, 1040, 1270, []);
-  vWall(ctx, 830, 1040, 1270, []);
-  vWall(ctx, 870, 1040, 1270, []);
-  vWall(ctx, 30, 1340, 1570, []);
-  vWall(ctx, 410, 1340, 1570, []);
-  vWall(ctx, 450, 1340, 1570, []);
-  vWall(ctx, 830, 1340, 1570, []);
-  vWall(ctx, 870, 1340, 1570, []);
+  vWall(ctx, 30, 1420, 1650, []);
+  vWall(ctx, 550, 1420, 1650, []);
+  vWall(ctx, 590, 1420, 1650, []);
+  vWall(ctx, 1110, 1420, 1650, []);
+  vWall(ctx, 1150, 1420, 1650, []);
+  vWall(ctx, 30, 1720, 1950, []);
+  vWall(ctx, 550, 1720, 1950, []);
+  vWall(ctx, 590, 1720, 1950, []);
+  vWall(ctx, 1110, 1720, 1950, []);
+  vWall(ctx, 1150, 1720, 1950, []);
 
   const gaps: Array<[number, number]> = [
-    [316, 356],
-    [384, 432],
-    [548, 588],
-    [620, 660],
-    [796, 836]
+    [480, 520],
+    [890, 930],
+    [1200, 1240]
   ];
-  vWall(ctx, 382, 150, 950, gaps);
-  vWall(ctx, 440, 150, 950, gaps);
-  vWall(ctx, 790, 150, 950, gaps);
-  vWall(ctx, 840, 150, 950, [
-    [316, 356],
-    [384, 432],
-    [548, 588],
-    [620, 660],
-    [746, 786],
-    [796, 836]
+  vWall(ctx, 550, 150, 1330, gaps);
+  vWall(ctx, 590, 150, 1330, []);
+  vWall(ctx, 1110, 150, 1330, gaps);
+  vWall(ctx, 1150, 150, 1330, [[900, 940]]);
+
+  hWall(ctx, 580, 30, 550, []);
+  hWall(ctx, 580, 590, 1110, []);
+  hWall(ctx, 1000, 30, 550, []);
+  hWall(ctx, 1000, 590, 1110, []);
+  hWall(ctx, 615, 1150, 1570, [
+    [1240, 1272],
+    [1400, 1432]
   ]);
 
-  hWall(ctx, 410, 30, 382, [[156, 196]]);
-  hWall(ctx, 410, 448, 790, [[556, 596]]);
-  hWall(ctx, 655, 30, 382, [[156, 196]]);
-  hWall(ctx, 655, 448, 790, [[556, 596]]);
-  hWall(ctx, 615, 848, 1250, [
-    [960, 992],
-    [1120, 1152]
-  ]);
-
-  for (const [, to] of gaps) {
-    rect(ctx, 384, to - 26, 6, 22, "#a07a52");
-    rect(ctx, 442, to - 26, 6, 22, "#a07a52");
-    rect(ctx, 792, to - 26, 6, 22, "#a07a52");
-    rect(ctx, 842, to - 26, 6, 22, "#a07a52");
+  const doorMarker = (x: number, from: number, to: number) => {
+    rect(ctx, x, to - 26, 6, 22, "#a07a52");
+    rect(ctx, x, from + 2, 6, 3, "#c9a071");
+  };
+  for (const [from, to] of gaps) {
+    doorMarker(552, from, to);
+    doorMarker(1112, from, to);
   }
-  rect(ctx, 1004, 617, 24, 6, "#a07a52");
+  doorMarker(1152, 900, 940);
+  for (const [x, w] of [
+    [550, 40],
+    [1110, 40],
+    [1230, 40]
+  ] as const) {
+    rect(ctx, x + 2, 1332, w - 4, 26, "#d7dde6");
+    for (let i = 0; i < 4; i++) rect(ctx, x + 4, 1334 + i * 6, w - 6, 2, "#9aa3ae");
+  }
+  rect(ctx, 1246, 617, 24, 6, "#a07a52");
 
   for (const [cx, door] of [
-    [220, 1270],
-    [640, 1270],
-    [1060, 1270],
-    [220, 1570],
-    [640, 1570],
-    [1060, 1570]
+    [290, 1650],
+    [850, 1650],
+    [1360, 1650],
+    [290, 1950],
+    [850, 1950],
+    [1360, 1950]
   ]) {
     rect(ctx, cx - 20, door, 40, 10, "#eef1f5");
     rect(ctx, cx - 16, door + 2, 32, 6, "#9aa3ae");
+  }
+}
+
+function drawAisle(ctx: Ctx, x: number, y: number, w: number, h: number) {
+  if (w <= 0 || h <= 0) return;
+  rect(ctx, x, y, w, h, CORRIDOR);
+  for (let yy = y + 12; yy < y + h; yy += 24) {
+    rect(ctx, x + 2, yy, w - 4, 1, CORRIDOR_LINE);
+  }
+  rect(ctx, x, y, 2, h, CORRIDOR_EDGE);
+  rect(ctx, x + w - 2, y, 2, h, CORRIDOR_EDGE);
+}
+
+function drawUpperAisles(ctx: Ctx) {
+  for (const area of AREAS) {
+    if (!["intranet", "logistica", "soporte", "portal"].includes(area.id)) continue;
+    const { x, y, w, h } = area;
+    drawAisle(ctx, x + 20, y + 218, w - 40, 22);
+    drawAisle(ctx, x, y + 240, 40, h - 240);
+    drawAisle(ctx, x + 200, y + 240, 80, h - 240);
+    drawAisle(ctx, x + w - 80, y + 240, 80, h - 240);
+    drawAisle(ctx, x, y + h - 12, w, 12);
   }
 }
 
@@ -557,36 +599,36 @@ function drawCafe(ctx: Ctx) {
 }
 
 function drawMeeting(ctx: Ctx) {
-  rect(ctx, 448, 668, 334, 274, "#e9edf2");
-  rect(ctx, 470, 680, 150, 44, "#f4f6f8");
-  rect(ctx, 474, 684, 142, 36, "#dfe8f0");
-  rect(ctx, 482, 694, 60, 3, "#5a8fd0");
-  rect(ctx, 482, 702, 90, 3, "#8fa8c0");
+  rect(ctx, 590, 668, 520, 274, "#e9edf2");
+  rect(ctx, 610, 680, 150, 44, "#f4f6f8");
+  rect(ctx, 614, 684, 142, 36, "#dfe8f0");
+  rect(ctx, 622, 694, 60, 3, "#5a8fd0");
+  rect(ctx, 622, 702, 90, 3, "#8fa8c0");
 
-  rect(ctx, 486, 770, 250, 84, WOOD_DARK);
-  rect(ctx, 490, 774, 242, 76, WOOD);
-  rect(ctx, 490, 774, 242, 4, "#ecc48c");
+  rect(ctx, 626, 770, 250, 84, WOOD_DARK);
+  rect(ctx, 630, 774, 242, 76, WOOD);
+  rect(ctx, 630, 774, 242, 4, "#ecc48c");
   for (let i = 0; i < 3; i++) {
-    rect(ctx, 506 + i * 70, 748, 26, 16, "#3b4657");
-    rect(ctx, 506 + i * 70, 860, 26, 16, "#3b4657");
+    rect(ctx, 646 + i * 70, 748, 26, 16, "#3b4657");
+    rect(ctx, 646 + i * 70, 860, 26, 16, "#3b4657");
   }
-  rect(ctx, 462, 800, 16, 26, "#3b4657");
-  rect(ctx, 744, 800, 16, 26, "#3b4657");
-  drawPlant(ctx, 730, 680);
+  rect(ctx, 602, 800, 16, 26, "#3b4657");
+  rect(ctx, 884, 800, 16, 26, "#3b4657");
+  drawPlant(ctx, 870, 680);
 }
 
 function drawBathroom(ctx: Ctx) {
-  rect(ctx, 848, 168, 394, 439, "#e3e7ec");
+  rect(ctx, 1150, 168, 420, 439, "#e3e7ec");
   for (let y = 168; y < 607; y += 24) {
-    rect(ctx, 848, y, 394, 1, "#cfd5dd");
+    rect(ctx, 1150, y, 420, 1, "#cfd5dd");
   }
-  for (let x = 848; x < 1242; x += 24) {
+  for (let x = 1150; x < 1570; x += 24) {
     rect(ctx, x, 168, 1, 439, "#cfd5dd");
   }
 
   for (const [side, start] of [
-    ["left", 858],
-    ["right", 1050]
+    ["left", 1160],
+    ["right", 1352]
   ] as const) {
     for (let row = 0; row < 2; row++) {
       for (let i = 0; i < 3; i++) {
@@ -601,7 +643,7 @@ function drawBathroom(ctx: Ctx) {
         rect(ctx, sx + 20, sy + 78, 16, 3, "#c9cfd8");
       }
     }
-    const sinkX = side === "left" ? 876 : 1068;
+    const sinkX = side === "left" ? 1178 : 1370;
     rect(ctx, sinkX, 350, 120, 12, "#c9cfd8");
     for (let i = 0; i < 3; i++) {
       rect(ctx, sinkX + 8 + i * 35, 344, 20, 14, "#f4f6f8");
@@ -609,25 +651,25 @@ function drawBathroom(ctx: Ctx) {
     }
   }
 
-  drawWall(ctx, 1040, 168, 10, 457);
-  drawAreaLabel(ctx, 944, 190, "HOMBRES");
-  drawAreaLabel(ctx, 1142, 190, "MUJERES");
-  drawPlant(ctx, 850, 540);
-  drawPlant(ctx, 1200, 540);
+  drawWall(ctx, 1340, 168, 10, 457);
+  drawAreaLabel(ctx, 1245, 190, "HOMBRES");
+  drawAreaLabel(ctx, 1435, 190, "MUJERES");
+  drawPlant(ctx, 1152, 540);
+  drawPlant(ctx, 1540, 540);
 }
 
 function drawPasillo(ctx: Ctx) {
-  rect(ctx, 848, 633, 394, 310, "#e6e9ee");
-  for (let y = 633; y < 943; y += 32) {
-    rect(ctx, 848, y, 394, 1, "#cfd5dd");
+  rect(ctx, 1150, 633, 420, 697, "#e6e9ee");
+  for (let y = 633; y < 1330; y += 32) {
+    rect(ctx, 1150, y, 420, 1, "#cfd5dd");
   }
-  rect(ctx, 880, 700, 130, 44, "#2f5f95");
-  rect(ctx, 884, 704, 122, 16, "#3f6fad");
-  rect(ctx, 884, 722, 122, 18, "#4f7fbd");
-  rect(ctx, 1020, 760, 70, 26, WOOD_DARK);
-  rect(ctx, 1023, 763, 64, 20, WOOD);
-  drawPlant(ctx, 1180, 680);
-  drawPlant(ctx, 870, 860);
+  rect(ctx, 1160, 700, 130, 44, "#2f5f95");
+  rect(ctx, 1164, 704, 122, 16, "#3f6fad");
+  rect(ctx, 1164, 722, 122, 18, "#4f7fbd");
+  rect(ctx, 1300, 760, 70, 26, WOOD_DARK);
+  rect(ctx, 1303, 763, 64, 20, WOOD);
+  drawPlant(ctx, 1460, 680);
+  drawPlant(ctx, 1150, 860);
 }
 
 function drawReception(ctx: Ctx) {
@@ -651,14 +693,14 @@ function drawReception(ctx: Ctx) {
 
 function drawEntrance(ctx: Ctx) {
   const y = 794;
-  rect(ctx, 1246, y - 6, 16, 66, "#9aa2ad");
-  rect(ctx, 1250, y, 10, 26, "#2f5f95");
-  rect(ctx, 1250, y + 30, 10, 26, "#2f5f95");
-  rect(ctx, 1252, y + 4, 6, 18, "#4f86c0");
-  rect(ctx, 1252, y + 34, 6, 18, "#4f86c0");
-  rect(ctx, 1258, y + 24, 3, 8, "#d8dce2");
-  rect(ctx, 1216, y + 58, 34, 5, "#2f5f95");
-  rect(ctx, 1220, y + 63, 30, 3, "#4f7fbd");
+  rect(ctx, 1566, y - 6, 16, 66, "#9aa2ad");
+  rect(ctx, 1570, y, 10, 26, "#2f5f95");
+  rect(ctx, 1570, y + 30, 10, 26, "#2f5f95");
+  rect(ctx, 1572, y + 4, 6, 18, "#4f86c0");
+  rect(ctx, 1572, y + 34, 6, 18, "#4f86c0");
+  rect(ctx, 1578, y + 24, 3, 8, "#d8dce2");
+  rect(ctx, 1536, y + 58, 34, 5, "#2f5f95");
+  rect(ctx, 1540, y + 63, 30, 3, "#4f7fbd");
 }
 
 function drawCubicle(ctx: Ctx, cubicle: Cubicle, index: number, screenOn: boolean, t: number) {
@@ -695,24 +737,28 @@ function drawCubicle(ctx: Ctx, cubicle: Cubicle, index: number, screenOn: boolea
   rect(ctx, x + 26, deskTop + 22, 2, 24, "#6b452c");
   rect(ctx, x + w - 28, deskTop + 22, 2, 24, "#6b452c");
 
-  drawLaptop(ctx, x + 22, deskTop, screenOn, t);
-  drawSideMonitor(ctx, x + w - 54, deskTop, screenOn, t);
+  const compact = w < 140;
+  const laptopX = compact ? x + 8 : x + 22;
+  const keyboardX = compact ? x + 38 : x + 52;
+  const mouseBase = compact ? x + 82 : x + 96;
+  drawLaptop(ctx, laptopX, deskTop, screenOn, t);
+  if (!compact) drawSideMonitor(ctx, x + w - 54, deskTop, screenOn, t);
 
-  rect(ctx, x + 52, deskTop + 2, 36, 8, "#232a33");
-  rect(ctx, x + 54, deskTop + 3, 32, 6, "#3a414d");
+  rect(ctx, keyboardX, deskTop + 2, 36, 8, "#232a33");
+  rect(ctx, keyboardX + 2, deskTop + 3, 32, 6, "#3a414d");
   for (let row = 0; row < 2; row++) {
     for (let col = 0; col < 10; col++) {
-      rect(ctx, x + 55 + col * 3, deskTop + 4 + row * 2, 2, 1, "#8a94a2");
+      rect(ctx, keyboardX + 3 + col * 3, deskTop + 4 + row * 2, 2, 1, "#8a94a2");
     }
   }
   if (screenOn) {
     const key = Math.floor((t / 120 + index * 3) % 10);
     const key2 = (key + 4) % 10;
-    rect(ctx, x + 55 + key * 3, deskTop + 4, 2, 1, "#f2d24a");
-    rect(ctx, x + 55 + key2 * 3, deskTop + 6, 2, 1, "#83c8dc");
+    rect(ctx, keyboardX + 3 + key * 3, deskTop + 4, 2, 1, "#f2d24a");
+    rect(ctx, keyboardX + 3 + key2 * 3, deskTop + 6, 2, 1, "#83c8dc");
   }
-  rect(ctx, x + 54, deskTop + 10, 30, 2, "#1b2028");
-  const mouseX = x + 96 + (screenOn ? Math.sin(t / 220 + index) * 2 : 0);
+  rect(ctx, keyboardX + 2, deskTop + 10, 30, 2, "#1b2028");
+  const mouseX = mouseBase + (screenOn ? Math.sin(t / 220 + index) * 2 : 0);
   ctx.fillStyle = "#1b2028";
   ctx.beginPath();
   ctx.ellipse(mouseX, deskTop + 7, 5, 3, 0, 0, Math.PI * 2);
@@ -724,7 +770,7 @@ function drawCubicle(ctx: Ctx, cubicle: Cubicle, index: number, screenOn: boolea
   rect(ctx, mouseX + 3, deskTop + 2, 1, 4, "#141920");
   if (screenOn) {
     rect(ctx, mouseX - 1, deskTop + 5, 2, 1, "#8fd0f0");
-    rect(ctx, x + 52, deskTop + 2, 36, 1, "#7fd0e855");
+    rect(ctx, keyboardX, deskTop + 2, 36, 1, "#7fd0e855");
   }
 
   const chair = ["#c0392b", "#3f8f57", "#2f5f95", "#d08a2e"][index % 4];
@@ -1047,11 +1093,15 @@ export function drawScene(
   drawCorridors(ctx);
   drawTopWall(ctx, width);
   rect(ctx, 0, 140, width, 10, "#1a335822");
+  ctx.save();
+  ctx.translate(0, 380);
   drawCafe(ctx);
   drawMeeting(ctx);
+  ctx.restore();
   drawBathroom(ctx);
   drawPasillo(ctx);
   drawRooms(ctx);
+  drawUpperAisles(ctx);
   drawEntrance(ctx);
   drawReception(ctx);
   for (const area of AREAS) {
@@ -1090,7 +1140,7 @@ export function drawScene(
     else labels.push(agent);
     if (agent.seated) drawChibiSeated(ctx, agent, t);
     else drawChibiStanding(ctx, agent, t, agent.walking);
-    if (agent.status !== "talking") drawBubble(ctx, agent, t);
+    if (agent.id !== "reception" && agent.status !== "talking") drawBubble(ctx, agent, t);
   }
 
   const boxes: Box[] = priority.map((agent) => nameplateBox(ctx, agent));

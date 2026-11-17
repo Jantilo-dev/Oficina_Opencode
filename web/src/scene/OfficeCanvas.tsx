@@ -4,6 +4,7 @@ import {
   BREAK_SPOTS,
   MEETING_SPOTS,
   SEATS,
+  SEAT_OPTIONS,
   STANDING_SPOTS,
   advance,
   breakDuration,
@@ -37,6 +38,10 @@ type Props = {
   selectedId: string | null;
   onSelect: (id: string) => void;
   theme: ThemeName;
+  breaksEnabled?: boolean;
+  seatAssignments?: Record<string, number>;
+  onSeatsChange?: (seats: Record<string, number>) => void;
+  pinnedAgents?: Set<string>;
 };
 
 type AgentState = {
@@ -44,7 +49,16 @@ type AgentState = {
   motion: Motion;
 };
 
-export default function OfficeCanvas({ agents, selectedId, onSelect, theme }: Props) {
+export default function OfficeCanvas({
+  agents,
+  selectedId,
+  onSelect,
+  theme,
+  breaksEnabled,
+  seatAssignments = {},
+  onSeatsChange,
+  pinnedAgents
+}: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const agentsRef = useRef<SceneAgent[]>(agents);
@@ -57,13 +71,23 @@ export default function OfficeCanvas({ agents, selectedId, onSelect, theme }: Pr
   const zoomRef = useRef(1);
   const panRef = useRef({ x: 0, y: 0 });
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number; moved: boolean } | null>(null);
-  const [size, setSize] = useState({ width: 1280, height: 900 });
-  const mode = useMemo(() => breakMode(), []);
+  const [size, setSize] = useState({ width: 1600, height: 900 });
+  const urlMode = useMemo(() => breakMode(), []);
+  const mode = breaksEnabled === false ? "off" : urlMode;
 
   selectedRef.current = selectedId;
   agentsRef.current = agents;
 
-  const layout = useMemo(() => ({ width: 1280, height: 1640 }), []);
+  const layout = useMemo(() => ({ width: 1600, height: 2020 }), []);
+  const autoSeatOrder = useMemo(
+    () =>
+      SEATS.map((seat) => seat.index).sort((a, b) => {
+        const aRole = SEAT_OPTIONS[a]?.role ? 1 : 0;
+        const bRole = SEAT_OPTIONS[b]?.role ? 1 : 0;
+        return aRole - bRole || a - b;
+      }),
+    []
+  );
 
   useEffect(() => {
     const element = wrapRef.current;
@@ -97,16 +121,27 @@ export default function OfficeCanvas({ agents, selectedId, onSelect, theme }: Pr
     for (const agent of ordered) {
       if (states.has(agent.id)) continue;
       let seat: number | null = null;
+      const assigned = seatAssignments[agent.id];
+      if (
+        assigned !== undefined &&
+        Number.isInteger(assigned) &&
+        assigned >= 0 &&
+        assigned < SEATS.length &&
+        !usedSeats.has(assigned)
+      ) {
+        seat = assigned;
+        usedSeats.add(assigned);
+      }
       const preferred = agent.isManager ? MANAGER_SEAT : -1;
-      if (preferred >= 0 && !usedSeats.has(preferred)) {
+      if (seat === null && preferred >= 0 && !usedSeats.has(preferred)) {
         seat = preferred;
         usedSeats.add(preferred);
       }
-      for (let index = 0; seat === null && index < SEATS.length; index++) {
+      for (const index of autoSeatOrder) {
+        if (seat !== null) break;
         if (!usedSeats.has(index)) {
           seat = index;
           usedSeats.add(index);
-          break;
         }
       }
       let spot: number | null = null;
@@ -145,7 +180,13 @@ export default function OfficeCanvas({ agents, selectedId, onSelect, theme }: Pr
           meeting: null,
           breakSpot: null,
           mode: entering ? "stand" : seat !== null ? "desk" : "stand",
-          destination: null,
+          destination: entering
+            ? null
+            : seat !== null
+              ? `seat-${seat}`
+              : spot !== null
+                ? `spot-${spot}`
+                : `overflow-${hash % 200}`,
           nextBreakAt: performance.now() + firstBreakDelay(hash, mode),
           breakEndsAt: 0
         },
@@ -155,8 +196,31 @@ export default function OfficeCanvas({ agents, selectedId, onSelect, theme }: Pr
 
     for (const agent of agents) {
       const state = states.get(agent.id);
+      if (!state) continue;
+      const assigned = seatAssignments[agent.id];
+      if (
+        assigned === undefined ||
+        assigned === state.placement.seat ||
+        !Number.isInteger(assigned) ||
+        assigned < 0 ||
+        assigned >= SEATS.length ||
+        usedSeats.has(assigned)
+      ) {
+        continue;
+      }
+      if (state.placement.seat !== null) usedSeats.delete(state.placement.seat);
+      if (state.placement.spot !== null) {
+        usedSpots.delete(state.placement.spot);
+        state.placement.spot = null;
+      }
+      state.placement.seat = assigned;
+      usedSeats.add(assigned);
+    }
+
+    for (const agent of agents) {
+      const state = states.get(agent.id);
       if (!state || state.placement.seat !== null) continue;
-      for (let index = 0; index < SEATS.length; index++) {
+      for (const index of autoSeatOrder) {
         if (usedSeats.has(index)) continue;
         state.placement.seat = index;
         usedSeats.add(index);
@@ -171,29 +235,47 @@ export default function OfficeCanvas({ agents, selectedId, onSelect, theme }: Pr
     const manager = agents.find((agent) => agent.isManager);
     const managerState = manager ? states.get(manager.id) : undefined;
     const managerSeat = MANAGER_SEAT;
-    if (manager && managerState && managerState.placement.seat !== managerSeat) {
+    const managerAssigned = manager ? seatAssignments[manager.id] : undefined;
+    if (
+      manager &&
+      managerState &&
+      managerAssigned === undefined &&
+      managerState.placement.seat !== managerSeat
+    ) {
       const occupant = [...states.entries()].find(
         ([id, state]) => id !== manager.id && state.placement.seat === managerSeat
       );
-      if (occupant) {
-        occupant[1].placement.seat = managerState.placement.seat;
-        if (occupant[1].placement.seat === null && occupant[1].placement.spot === null) {
-          for (let index = 0; index < STANDING_SPOTS.length; index++) {
-            if (!usedSpots.has(index)) {
-              occupant[1].placement.spot = index;
-              usedSpots.add(index);
-              break;
+      const occupantAssigned = occupant ? seatAssignments[occupant[0]] !== undefined : false;
+      if (!occupant || !occupantAssigned) {
+        if (occupant) {
+          occupant[1].placement.seat = managerState.placement.seat;
+          if (occupant[1].placement.seat === null && occupant[1].placement.spot === null) {
+            for (let index = 0; index < STANDING_SPOTS.length; index++) {
+              if (!usedSpots.has(index)) {
+                occupant[1].placement.spot = index;
+                usedSpots.add(index);
+                break;
+              }
             }
           }
         }
-      }
-      managerState.placement.seat = managerSeat;
-      if (managerState.placement.spot !== null) {
-        usedSpots.delete(managerState.placement.spot);
-        managerState.placement.spot = null;
+        managerState.placement.seat = managerSeat;
+        if (managerState.placement.spot !== null) {
+          usedSpots.delete(managerState.placement.spot);
+          managerState.placement.spot = null;
+        }
       }
     }
-  }, [agents, mode]);
+  }, [agents, mode, seatAssignments]);
+
+  useEffect(() => {
+    if (!onSeatsChange) return;
+    const seats: Record<string, number> = {};
+    for (const [id, state] of stateRef.current) {
+      if (state.placement.seat !== null) seats[id] = state.placement.seat;
+    }
+    onSeatsChange(seats);
+  }, [agents, mode, seatAssignments, onSeatsChange]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -243,6 +325,13 @@ export default function OfficeCanvas({ agents, selectedId, onSelect, theme }: Pr
         const hash = hashOf(agent.id);
         const gender = agent.gender ?? agent.look?.parts?.gender ?? (hash % 2 === 0 ? "female" : "male");
         const female = gender === "female";
+        const pinned = pinnedAgents?.has(agent.id) ?? false;
+
+        if (pinned && placement.breakSpot !== null) {
+          usedBreak.delete(placement.breakSpot);
+          placement.breakSpot = null;
+          placement.breakEndsAt = 0;
+        }
 
         const activeBreak = placement.breakSpot !== null && placement.breakEndsAt > now && agent.status === "idle";
         if (placement.breakSpot !== null && (!activeBreak || mode === "off")) {
@@ -254,10 +343,18 @@ export default function OfficeCanvas({ agents, selectedId, onSelect, theme }: Pr
           }
         }
 
+        const working =
+          agent.status === "thinking" ||
+          agent.status === "coding" ||
+          agent.status === "running_tool" ||
+          agent.status === "error";
         let desired: Placement["mode"] = placement.seat !== null ? "desk" : "stand";
         if (agent.status === "talking") desired = "meeting";
+        if (working && placement.seat !== null) desired = "desk";
+        if (pinned && placement.seat !== null) desired = "desk";
         if (
           desired === "desk" &&
+          !pinned &&
           agent.status === "idle" &&
           placement.breakSpot === null &&
           mode !== "off" &&
@@ -349,12 +446,18 @@ export default function OfficeCanvas({ agents, selectedId, onSelect, theme }: Pr
           placement.mode = desired;
           placement.destination = destination;
 
-          const path = findPath(startAccess, goalAccess);
-          if (atSeat && seat) path.unshift({ x: seat.seatX, y: seat.seatY });
-          if (desired === "desk" && placement.seat !== null) {
-            path.push({ x: SEATS[placement.seat].seatX, y: SEATS[placement.seat].seatY });
+          if (atSeat && seat && desired === "desk" && placement.seat === previousSeat) {
+            setDestination(motion, []);
+          } else {
+            const path = findPath(startAccess, goalAccess);
+            if (path.length > 0) {
+              if (atSeat && seat) path.unshift({ x: seat.seatX, y: seat.seatY });
+              if (desired === "desk" && placement.seat !== null) {
+                path.push({ x: SEATS[placement.seat].seatX, y: SEATS[placement.seat].seatY });
+              }
+            }
+            setDestination(motion, path);
           }
-          setDestination(motion, path);
         }
 
         if (
@@ -368,7 +471,12 @@ export default function OfficeCanvas({ agents, selectedId, onSelect, theme }: Pr
 
         advance(motion, dt, 120);
         const walking = motion.path.length > 0;
-        const seated = desired === "desk" && !walking;
+        const seatNow = placement.seat !== null ? SEATS[placement.seat] : null;
+        const seated =
+          desired === "desk" &&
+          !walking &&
+          seatNow !== null &&
+          Math.hypot(motion.x - seatNow.seatX, motion.y - seatNow.seatY) < 10;
         views.push({
           id: agent.id,
           name: agent.name,

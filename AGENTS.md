@@ -76,6 +76,7 @@ web/
     api.ts                   fetchBootstrap, sesiones, prompts, mensajes
     useAgentSync.ts          Hook SSE para agentes externos (batching por rAF)
     types.ts, format.ts, characters.ts
+    teamRoles.ts            Responsabilidades y handoff predefinidos por rol
     index.css, chat.css      Tema de la UI
     scene/
       sprites.ts             Escena 2.5D: áreas, muebles, chibis, burbujas, temas
@@ -83,7 +84,8 @@ web/
       navigation.ts          Rejilla A*, muros/muebles y puertas transitables
       OfficeCanvas.tsx       Asignación, movimiento, zoom/pan, hit-test
       AgentPanel.tsx         Panel retro de detalle por agente
-    components/              NewSessionModal, SessionChat, CharacterModal
+    components/              NewSessionModal, TeamModal, ModelSelect, SessionChat, CharacterModal
+    layout/LayoutEditor.tsx  Editor rompecabezas: piezas, muros/puertas, pan/zoom, JSON
     office/                  Implementación anterior (mantener tipos/preview)
 scripts/
   probe.ts                   Prueba de humo con orquestador + 2 investigadores
@@ -106,13 +108,20 @@ código anterior no importado por la app actual.
    diffs y transcripciones.
 4. Los agentes externos llegan por `POST /api/agents/report`; `useAgentSync` los
    recibe vía `GET /api/agents/stream` y actualiza el estado por frame.
-5. `App.tsx` fusiona sesiones de opencode (`oc:<id>`) y agentes externos
-   (`live:<agentId>`) en `SceneAgent[]` para la escena.
+5. `App.tsx` fusiona sesiones raíz y subagentes activos de opencode (`oc:<id>`) y
+   agentes externos (`live:<agentId>`) en `SceneAgent[]` para la escena. Los
+   subagentes históricos inactivos no se muestran.
 6. Los eventos SSE se filtran por directorio: `session.created/updated` usan
    `info.directory` y el resto se descarta si la sesión no pertenece al directorio
    cargado.
-7. `/api/bootstrap` se reintenta con backoff, al recuperar el SSE y al volver a la
-   pestaña. Los metadatos de sesión se cachean 30 s y se piden con concurrencia 6.
+7. `/api/bootstrap` se reintenta con backoff y al volver a la pestaña. Los metadatos
+   se piden solo para raíces y subagentes activos/recientes, se cachean 30 s y se
+   consultan con concurrencia 6.
+8. `CREAR EQUIPO` (`TeamModal` + `createTeam` en `App.tsx`) elige área, método
+   Plan/Build y modelo por rol. Crea las cinco sesiones, las asigna a
+   Planificación/Frontend/Backend/QA/Documentación y solo lanza el prompt del jefe;
+   las otras cuatro quedan idle hasta **PASAR PLAN**. Las sesiones sin asignación usan
+   primero las oficinas inferiores para no ocupar los puestos de equipo.
 
 Mapeo de estados de opencode a la escena:
 
@@ -131,6 +140,8 @@ Mapeo de estados de opencode a la escena:
 |---|---|
 | `GET /api/health` | estado de la app y de opencode (`upstream`) |
 | `GET /api/bootstrap` | directorio, sesiones, estados y metadatos |
+| `GET /api/layout` | layout guardado en `layout.json` |
+| `PUT /api/layout` | guardar layout del editor |
 | `GET /api/events` | proxy SSE de `/global/event` |
 | `GET /api/opencode/agents` | agentes/tipos de opencode (modal de nueva sesión) |
 | `GET /api/models` | proveedores y modelos disponibles |
@@ -161,26 +172,55 @@ curl.exe -X POST http://127.0.0.1:5174/api/agents/report `
   `image-rendering: pixelated`.
 - Suelo de ladrillo según tema; pared superior con ventanas, calendario y puertas
   de cristal. Pasillos verticales arriba y red de pasillos verticales y
-  horizontales en la planta baja.
-- Áreas superiores: **AREA INTRANET**, **AREA LOGÍSTICA**, **AREA SOPORTE**,
-  **AREA PORTAL** (dos cubículos cada una), **SALA DE REUNIONES**, **COCINA**,
+  horizontales en la planta baja. La sala de reuniones tiene una sola puerta; las
+  escaleras al final de los corredores superiores y en el pasillo bajan a la planta
+  baja.
+- Áreas superiores: **AREA INTRANET**, **AREA LOGÍSTICA**, **AREA SOPORTE** y
+  **AREA PORTAL** (cinco puestos cada una: **PLANIFICACIÓN (JEFE)**, **FRONTEND**,
+  **BACKEND**, **QA** y **DOCUMENTACIÓN**), **SALA DE REUNIONES**, **COCINA**,
   **PASILLO** (entrada y recepción) y **BAÑO** dividido en **HOMBRES** y
   **MUJERES** (3 cabinas por fila y lado, lavabos y muro divisorio).
 - Planta baja: **GERENCIA**, **OFICINA 2**, **OFICINA 3**, **OFICINA 4**,
-  **OFICINA 5** y **OFICINA 6**. Cada oficina mide 380×230, tiene dos cubículos y
-  **una sola puerta** hacia el pasillo.
-- `WORKSTATIONS` (20) combina `CUBICLES` (8 superiores) y `CUBICLES2` (12 en las
-  seis oficinas), todos con el mismo diseño de escritorio. `SEATS` en
+  **OFICINA 5** y **OFICINA 6**. Cada oficina tiene dos cubículos y **una sola
+  puerta** hacia el corredor.
+- `WORKSTATIONS` (32) combina `CUBICLES` (20 superiores, 5 por área) y `CUBICLES2`
+  (12 en las seis oficinas), todos con el mismo diseño de escritorio. `SEATS` en
   `occupancy.ts` es la fuente para asignar puestos.
 - `idle` con puesto se queda sentado y sale a pausas programadas (café, agua,
   baño); los agentes sin puesto esperan en pasillo/corredor o en overflow.
 - Los baños usan spots con `gender`; los agentes entran por la puerta y el lado
   que corresponde a su género.
 - `talking` → puestos únicos en la sala de reuniones con burbuja compartida.
-- El manager (`managerId`) ocupa `MANAGER_SEAT`, el primer puesto de GERENCIA.
+- El manager (`managerId`) ocupa `MANAGER_SEAT`, el primer puesto de GERENCIA. Solo
+  `plan` y `build` son elegibles (`MANAGER_AGENTS` en `App.tsx`); desde el detalle de
+  una sesión elegible se puede pulsar **HACER MANAGER** para cambiarlo.
+- Los puestos se asignan por sesión con el selector **puesto** del detalle
+  (`SEAT_OPTIONS` en `occupancy.ts`); `App.tsx` guarda `seatAssignments` en
+  `localStorage` (`pixel-office-seats`) y `OfficeCanvas` aplica el cambio emitiendo
+  `onSeatsChange`. La cabecera **PAUSAS** desactiva las pausas idle.
+- Cada área superior tiene un jefe en **PLANIFICACIÓN** y cuatro destinos,
+  **FRONTEND**, **BACKEND**, **QA** y **DOCUMENTACIÓN**. El botón **PASAR PLAN** de
+  `SessionChat` envía el último texto del asistente del jefe a las sesiones ocupantes
+  de los otros cuatro puestos del área. Cuando los cinco puestos están ocupados por
+  sesiones de opencode, el equipo queda fijado: `OfficeCanvas` fuerza el puesto,
+  bloquea pausas/meetings y el selector de puesto se deshabilita.
+- `teamRoles.ts` define la responsabilidad de cada rol (Jefe divide; Frontend UI/botones;
+  Backend lógica/API; QA pruebas; Documentación docs/Scrum). El jefe recibe la orden de
+  resolver dudas y dividir el plan; cada respuesta suya debe cerrar con
+  `LISTO PARA PASAR AL EQUIPO: SÍ/NO` y **PASAR PLAN** inyecta el brief del rol en cada
+  destino. Al quedar idle los cuatro destinos y sus subagentes, el jefe publica
+  `JEFE_DONE_TEXT`.
+- `App.tsx` detecta equipos completos por los títulos `AREA · ROL`, restaura sus puestos
+  recomendados si se perdieron, los fija y obtiene los 4 destinos de `PASAR PLAN` desde
+  esa detección. `intended` (método/modelo) se persiste en
+  `pixel-office-intended`; si falta, los roles no-jefe usan `build`.
+- Los subagentes se asignan al equipo siguiendo `parentID` hasta la raíz y se fuerza su
+  modelo a `opencode-go/deepseek-v4.1-flash`, también si llegan después del equipo.
 - `navigation.ts` construye una rejilla de 6 px, bloquea muros (respetando las
   puertas), muebles y escritorios, y calcula rutas A*; los personajes solo cruzan
   por huecos de puerta y se mueven por pasillos.
+- `drawUpperAisles` pinta los pasillos internos de cada área superior (banda entre
+  filas, laterales, central y borde inferior) con el color de corredor del tema.
 - La recepción del PASILLO tiene puerta de entrada en la pared derecha y una
   recepcionista fija (`drawReception` + `RECEPTION_DESK`), que no depende de
   opencode.
@@ -197,6 +237,19 @@ curl.exe -X POST http://127.0.0.1:5174/api/agents/report `
   pelo largo y falda al estar de pie, los hombres pelo corto y pantalón.
 - Burbujas: puntos (thinking), monitor (coding), terminal (running_tool), taza
   (idle), diálogo (talking), `!` (error).
+- `SessionChat` muestra una línea animada mientras el agente trabaja:
+  **Pensando**, **Revisando archivos**, **Editando archivos**, **Ejecutando
+  comando**, **Esperando permiso** o **Reintentando**; el estado de escena se marca
+  `busy` de forma optimista al enviar el prompt.
+- Mientras el estado es `thinking/coding/running_tool/error`, `OfficeCanvas` fuerza
+  el puesto y cancela pausas/reuniones: el personaje no se levanta hasta quedar idle.
+- `ErrorBox` detecta el error de región de OpenCode Go, muestra un enlace directo a la
+  configuración de privacidad/regiones y, si existe el mismo modelo en el proveedor
+  regional `opencode`, ofrece **Usar modelo regional**. También detecta **Insufficient
+  balance** y enlaza a facturación; `opencode` se marca “pago por uso” y `opencode-go`
+  “Go · región Global”. Con un equipo seleccionado ofrece **Usar OpenCode Go en el
+  equipo**, que cambia cada miembro al equivalente Go. El error completo se toma de
+  `error.data.message`/`info.error`, también en el chat.
 - Personajes: `CharacterLook.parts` (pelo, ropa, piel, accesorio) y la galería se
   dibujan en los chibis; las imágenes propias se aceptan como `data:`, `blob:` o
   ruta local y se cachean.
@@ -210,6 +263,14 @@ curl.exe -X POST http://127.0.0.1:5174/api/agents/report `
   pasar siempre.
 - No añadir comentarios obvios ni explicaciones dentro del código; nombres claros.
 - UI y textos para el usuario en español; identificadores en inglés.
+- **Codificación UTF-8 obligatoria** (acentos, tildes y `Ñ`/`ñ`): todo fichero de
+  texto se guarda en UTF-8 **sin BOM** y con saltos **LF** (`.editorconfig` y
+  `.gitattributes` lo fijan). Al escribir código/README nunca usar en PowerShell 5.1
+  `Get-Content`/`Set-Content`/`Add-Content` sin encoding sobre ficheros con
+  acentos: re-codifican el UTF-8 como ANSI y rompen los acentos (doble codificación).
+  Usar las herramientas de edición del agente, o `[IO.File]::ReadAllText`/`WriteAllText`
+  con `New-Object Text.UTF8Encoding($false)`. Comprobar con `npm run check:encoding`
+  (falla ante BOM, CRLF, UTF-8 inválido o doble codificación).
 - Sin telemetría, sin CDN, sin assets externos, sin servicio remoto.
 - Bind a `127.0.0.1`. No abrir puertos a la red.
 - Commits estilo Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`,
@@ -226,8 +287,9 @@ npm run dev          # API + web con recarga
 npm run dev:api      # solo API (tsx watch)
 npm run dev:web      # solo Vite
 npm run typecheck    # tsc --noEmit
-npm run build        # typecheck + vite build
-npm run build:server # compila la API a dist/server
+npm run check:encoding # UTF-8 sin BOM/CRLF y sin acentos rotos
+npm run build        # typecheck + vite build + API a dist/server
+npm run build:server # compila solo la API a dist/server
 npm start            # sirve dist/web desde la API compilada
 npm run probe        # prueba con orquestador + 2 investigadores
 npm run clean-demo   # lista sesiones demo
@@ -240,12 +302,13 @@ node scripts/shot.mjs <url> <png>  # captura con Edge
 Antes de cada commit:
 
 ```powershell
+npm run check:encoding
 npm run typecheck
 npm run build
 ```
 
-CI (`.github/workflows/ci.yml`) ejecuta `npm ci`, `typecheck` y `build` en cada
-push y PR a `main`.
+CI (`.github/workflows/ci.yml`) ejecuta `npm ci`, `check:encoding`, `typecheck` y
+`build` en cada push y PR a `main`.
 
 Para probar la escena sin depender de opencode:
 
@@ -271,7 +334,18 @@ Los agentes externos son efímeros: se pierden al reiniciar el servidor.
   `server/opencode.ts`.
 - **Pausas**: `idle` con mesa sale según hash; ajustar `firstBreakDelay`,
   `nextBreakDelay`, `breakDuration` o `maxBreakers` en `occupancy.ts`.
-- **Tema**: ampliar `SCENE_PALETTES` y el tipo `ThemeName` en `office/sprites.ts`.
+- **Tema**: ampliar `SCENE_PALETTES` en `scene/sprites.ts` y el tipo `ThemeName` en
+  `office/sprites.ts`.
+- **Manager**: editar `MANAGER_AGENTS` en `App.tsx` o usar **HACER MANAGER** en el
+  detalle de una sesión `plan`/`build`.
+- **Puesto**: elegir en el selector del detalle; **AUTO** elimina la asignación
+  guardada. Las etiquetas salen de `SEAT_OPTIONS` en `occupancy.ts`.
+- **Equipo**: usar **CREAR EQUIPO**; `TeamModal` elige método y modelo por rol y
+  `createTeam` solo lanza el prompt del jefe. El método/modelo de una sesión también
+  se puede cambiar en el detalle de **EQUIPO**.
+- **Traspaso**: asignar jefe/Frontend/Backend/QA/Documentación en un área y pulsar
+  **PASAR PLAN** desde el chat del jefe; `runHandoff` en `App.tsx` envía el último
+  texto del asistente a las otras cuatro sesiones.
 - **Personaje**: ampliar `CharacterParts`/`LOOK_PRESETS` (incluido `gender`) y su
   dibujo en `drawChibiSeated`/`drawChibiStanding`.
 - **Zoom/pan**: `zoomRef`, `panRef` y `baseViewRef` en `OfficeCanvas.tsx`; los
@@ -280,8 +354,10 @@ Los agentes externos son efímeros: se pierden al reiniciar el servidor.
 ## 11. Límites conocidos
 
 - Los agentes externos viven en memoria; no se persisten.
-- La planta tiene 20 puestos. A partir de ahí los agentes esperan de pie en el
+- La planta tiene 32 puestos. A partir de ahí los agentes esperan de pie en el
   pasillo o en la rejilla de overflow.
+- El editor de layout (`EDITAR OFICINA`) guarda y exporta piezas, pero todavía no
+  alimenta la navegación/equipos en vivo; esa integración es la siguiente fase.
 - Las sesiones mostradas pertenecen al directorio donde corre `opencode serve`.
 - No hay terminal embebido (PTY) en la UI actual.
 - El proxy SSE reintenta si opencode se cae; el aviso aparece en la cabecera.

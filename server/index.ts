@@ -1,6 +1,6 @@
 import express from "express";
 import type { Response } from "express";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   UpstreamError,
@@ -32,6 +32,7 @@ const app = express();
 app.use(express.json({ limit: "64kb" }));
 
 const SESSION_ID = /^ses_[A-Za-z0-9]+$/;
+const LAYOUT_FILE = join(process.cwd(), "layout.json");
 
 function fail(res: Response, error: unknown) {
   if (error instanceof UpstreamError) {
@@ -57,6 +58,49 @@ app.get("/api/health", async (_req, res) => {
 app.get("/api/bootstrap", async (_req, res) => {
   try {
     res.json(await fetchBootstrap());
+  } catch (error) {
+    fail(res, error);
+  }
+});
+
+type SavedLayout = { version: number; width: number; height: number; pieces: unknown[] };
+
+function isSavedLayout(value: unknown): value is SavedLayout {
+  if (!value || typeof value !== "object") return false;
+  const layout = value as Partial<SavedLayout>;
+  return (
+    Number.isFinite(layout.width) &&
+    Number(layout.width) >= 200 &&
+    Number(layout.width) <= 6000 &&
+    Number.isFinite(layout.height) &&
+    Number(layout.height) >= 200 &&
+    Number(layout.height) <= 6000 &&
+    Array.isArray(layout.pieces) &&
+    layout.pieces.length <= 500
+  );
+}
+
+app.get("/api/layout", (_req, res) => {
+  try {
+    if (!existsSync(LAYOUT_FILE)) {
+      res.json({ layout: null });
+      return;
+    }
+    const layout = JSON.parse(readFileSync(LAYOUT_FILE, "utf8"));
+    res.json({ layout: isSavedLayout(layout) ? layout : null });
+  } catch {
+    res.json({ layout: null });
+  }
+});
+
+app.put("/api/layout", (req, res) => {
+  if (!isSavedLayout(req.body)) {
+    res.status(400).json({ error: "layout inválido" });
+    return;
+  }
+  try {
+    writeFileSync(LAYOUT_FILE, `${JSON.stringify(req.body, null, 2)}\n`, "utf8");
+    res.json({ ok: true });
   } catch (error) {
     fail(res, error);
   }
@@ -264,6 +308,10 @@ app.get("/api/events", (req, res) => {
           await reader.cancel();
         } catch {
           /* ignore */
+        }
+        if (!closed) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelay));
+          retryDelay = Math.min(8000, retryDelay * 2);
         }
       } catch {
         if (closed) break;

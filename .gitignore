@@ -9,3 +9,4 @@ crop*.png
 !.env.example
 .DS_Store
 Thumbs.db
+layout.json

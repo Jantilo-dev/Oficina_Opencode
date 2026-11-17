@@ -5,9 +5,12 @@
 
 ![Oficina Opencode](docs/preview.png)
 
-A tiny pixel-art office for **opencode**: it mirrors sessions and subagents in real
-time, and lets you create sessions and chat with them from the browser. Local only,
-no telemetry.
+A tiny pixel-art office for **opencode**: it mirrors root sessions and their active
+subagents in real time, and lets you create sessions and chat with them from the
+browser. Local only, no telemetry.
+
+The whole interface is in Spanish and every text file is stored as **UTF-8 without
+BOM** (accents, tildes and `Ñ` included); `npm run check:encoding` validates it.
 
 ```
 opencode (serve, 127.0.0.1:4096)
@@ -52,7 +55,6 @@ For a production build served by the API itself:
 
 ```powershell
 npm run build
-npm run build:server
 npm start
 ```
 
@@ -63,12 +65,18 @@ npm start
 - A floor plan inspired by a classic cubicle office: carpet, white walls, an
   entrance and **reception** in the hall, four upper work areas, a conference room,
   kitchen, corridors, split **bathrooms** and **six lower offices**.
-- The upper floor has eight cubicles. The lower floor has **GERENCIA, OFICINA 2,
-  OFICINA 3, OFICINA 4, OFICINA 5 and OFICINA 6**, each with two cubicles and a
-  single door, for **20 seats total**. The manager (`orquestador`/`plan`/`build`)
-  takes one GERENCIA desk, and a fixed receptionist works at the hall entrance.
+- The four upper work areas have **five desks each**: **PLANIFICACIÓN (JEFE)**,
+  **FRONTEND**, **BACKEND**, **QA** and **DOCUMENTACIÓN**. The lower floor has
+  **GERENCIA, OFICINA 2, OFICINA 3, OFICINA 4, OFICINA 5 and OFICINA 6**, each with
+  two cubicles and a single door, for **32 seats total**. The manager (`plan` or
+  `build`) takes one GERENCIA desk; select an eligible session in the team panel and
+  press **HACER MANAGER** to change it. A fixed receptionist works at the hall
+  entrance.
 - Agents walk along the corridors and through the doors (pathfinding with the floor
-  walls and furniture as obstacles); they no longer cross walls.
+  walls and furniture as obstacles); they no longer cross walls. Each upper area has
+  internal aisles between desk rows and around the desks. The meeting room
+  has a single entrance, and stairs at the bottom of the upper corridors and in the
+  hall connect to the lower floor.
 - Idle agents stay seated at their desks and occasionally get up for coffee, water or
   the bathroom. Bathrooms are split into **HOMBRES** and **MUJERES**, and agents use
   the side that matches their gender. Add `?breaks=fast` (or `?breaks=demo`) to
@@ -79,18 +87,70 @@ npm start
   screen again. The empty area is drawn as an "EN REPARACIÓN" construction zone.
 - Activity from `message.part.updated`: `edit`/`write` types, `read`/`grep` reads, `bash` runs a terminal.
 - Bubbles for permission requests (`!`), errors (`x`) and retries.
+- While an agent is working, **SESIÓN** shows an animated activity line
+  (**Pensando…**, **Revisando archivos…**, **Editando archivos…**,
+  **Ejecutando comando…**) and the scene bubble/status updates immediately.
 - Right panel with two tabs: **EQUIPO** (sessions, agent, status, details) and
-  **SESIÓN** (chat with the selected session).
+  **SESIÓN** (chat with the selected session). The scene and team panel show the
+  root sessions plus subagents that are active (busy, retry, error or waiting for
+  permission); historical subagents stay hidden.
+- In **EQUIPO**, select a session and choose its **puesto** (desk). **AUTO** lets the
+  office pick one; assigned desks are saved in `localStorage`. **PAUSAS** in the
+  header turns idle breaks on or off so characters can stay at their desks.
+- For an upper area, assign one session to **PLANIFICACIÓN (JEFE)**, one to
+  **FRONTEND**, one to **BACKEND**, one to **QA** and one to **DOCUMENTACIÓN**.
+  Chat with the jefe and press **PASAR PLAN** in **SESIÓN**: the last assistant plan
+  is sent to the other four sessions of that area. The jefe resolves the user’s
+  questions and must finish each reply with **LISTO PARA PASAR AL EQUIPO: SÍ** or
+  **LISTO PARA PASAR AL EQUIPO: NO**; the chat shows that state before sending. When
+  the four roles finish, the jefe posts **“El pedido ya está hecho, favor revisar para
+  seguir con lo demás.”**. When the five roles are complete,
+  the team is pinned to that office: seats are locked and its members do not leave for
+  breaks or meetings. Teams are also detected by their session titles, so **PASAR PLAN**
+  keeps working and the recommended seats are restored after a reload.
+- Each role has a predefined brief: **Jefe** splits the plan; **Frontend** builds UI,
+  buttons and styles; **Backend** builds logic, API and data; **QA** tests and
+  acceptance; **Documentación** writes docs and Scrum. The brief is included in
+  **PASAR PLAN** so each member knows its function.
+- Subagents/external sessions are matched to a team through their `parentID` chain.
+  They are automatically assigned **`opencode-go/deepseek-v4.1-flash`** so they do not
+  fall back to the pay-as-you-go `opencode` provider.
 
 ## Create sessions and chat
 
 - `+ NUEVA SESIÓN` opens a modal: pick an agent (primary or subagent), an optional
   model, a title and the first instruction.
+- `CREAR EQUIPO` opens a modal: choose one of the four upper areas, plus the working
+  method (**Plan** or **Build**) and the AI model for **Planificación (Jefe)**,
+  **Frontend**, **Backend**, **QA** and **Documentación**. It creates the five
+  sessions and assigns them to that area's role desks. Only the jefe starts; the
+  other four wait for **PASAR PLAN**.
 - Each agent card shows its `edit` and `bash` permissions, so you know what it may do.
+- In the **EQUIPO** detail you can change a session's **método** and **modelo** at any
+  time; the new values apply to later prompts and to **PASAR PLAN**.
 - The session appears on the floor (it walks in) and opens in **SESIÓN**, with
   streaming text, tool chips, tokens/cost, an input to keep talking, **Abortar**
   while it works and **Eliminar** (also removes its subagents).
 - Several sessions run in parallel, each with its own context and desk.
+
+## Office editor
+
+`EDITAR OFICINA` opens a puzzle-style layout editor:
+
+- Pieces: areas of 5 desks, offices of 2, kitchen, meeting room, bathroom,
+  reception, entrance, straight/corner/T/cross corridors, walls and doors. Rooms are
+  drawn with floor, perimeter walls and a door opening; corridors are open floors.
+- Pick a piece and click to place it; drag to move, `R` to rotate corridors/walls/doors
+  or to cycle the door side of a room (right/bottom/left/top), `Supr` to delete, snap
+  to a 20 px grid and magnetic alignment to other pieces.
+- Pieces cannot overlap: the editor rejects occupied spaces.
+- Navigate the canvas with drag on empty floor or right/middle mouse; zoom with the
+  wheel; **Ajustar** fits the layout; **+ Ancho** / **+ Alto** expand the world.
+- Save in `localStorage` and on the API (`layout.json`), export/import the layout as
+  JSON. **Guardar** also confirms when the server copy is written. **Vaciar** starts
+  empty and **Ejemplo** restores the sample layout.
+- This editor is the layout designer. The live navigation and teams still use the
+  current office until the layout is connected in the next phase.
 
 ## API endpoints
 
@@ -98,6 +158,8 @@ npm start
 |---|---|
 | `GET /api/health` | app + upstream status |
 | `GET /api/bootstrap` | directory, sessions, statuses, agent/model metadata |
+| `GET /api/layout` | saved office layout (`layout.json`) |
+| `PUT /api/layout` | persist the editor layout |
 | `GET /api/events` | SSE proxy of opencode `/global/event` |
 | `GET /api/opencode/agents` | opencode agents with mode and permissions |
 | `GET /api/agents` | snapshot of external live agents |
@@ -209,19 +271,41 @@ curl.exe -X DELETE http://127.0.0.1:5174/api/agents/ana
 
 The floor is split into named rooms:
 
-- AREA INTRANET, AREA LOGÍSTICA, AREA SOPORTE, AREA PORTAL (two cubicles each)
-- SALA DE REUNIONES (talking agents meet here)
+- AREA INTRANET, AREA LOGÍSTICA, AREA SOPORTE, AREA PORTAL (five desks each:
+  Planificación/Jefe, Frontend, Backend, QA and Documentación)
+- SALA DE REUNIONES (talking agents meet here; one entrance)
 - COCINA (coffee, water, vending and table; agents come here on breaks)
 - BAÑO split into HOMBRES and MUJERES (stalls, sinks and a dividing wall)
 - PASILLO connecting the rooms, with reception and entrance door
 - GERENCIA, OFICINA 2, OFICINA 3, OFICINA 4, OFICINA 5 and OFICINA 6 (two
-  cubicles and one door each) on the lower floor
+  cubicles and one door each) on the lower floor, reached by the corridor and hall
+  stairs
 
 Desks keep their own monitor, keyboard, mouse and screen state. Seated agents rest
 their hands on the keyboard and mouse; while coding they type and move the mouse.
 A monitor turns on while its seat is occupied and turns off when the agent leaves;
 off screens are dark with a red LED. Characters have a gender and use long hair
-and/or a skirt when female.
+and/or a skirt when female. While an agent is working it stays at its assigned
+desk; breaks and meetings are cancelled until it becomes idle again.
+
+## Model region error
+
+If opencode says a model is “hosted outside Europe and the United States”, set the
+organization privacy region to **Global** in the opencode console (the app shows a
+direct link in the error) or choose another model in **CREAR EQUIPO** / the session
+detail. Models from the **OpenCode Go** provider are marked “requiere región Global”;
+when the same model exists in the regional `opencode` provider, the error offers
+**Usar modelo regional**, which switches the session model without resending the prompt.
+
+## Model balance error
+
+If opencode reports **Insufficient balance** or that a request is pay-as-you-go, the
+model belongs to the billed **OpenCode** provider. Top up the credits from the link in
+the error, or use an **OpenCode Go** model (OpenCode Go only covers requests to its own
+provider). The model selector marks `opencode` as **pago por uso** and `opencode-go` as
+**Go · región Global**. With a team selected, the error also offers **Usar OpenCode Go
+en el equipo**, which switches each member to the Go equivalent of its model.
+
 ## License
 
 GPL-3.0-only. Copyright (C) 2026 Julio Antilo. See [LICENSE](LICENSE).

@@ -26,14 +26,25 @@ import type {
 } from "./types";
 import SceneCanvas from "./scene/OfficeCanvas";
 import AgentPanel from "./scene/AgentPanel";
+import { SEAT_OPTIONS, type SeatRole } from "./scene/occupancy";
 import { useAgentSync } from "./useAgentSync";
 import type { SceneAgent, SceneStatus } from "./scene/sprites";
 import type { ThemeName } from "./office/sprites";
 import NewSessionModal from "./components/NewSessionModal";
+import TeamModal from "./components/TeamModal";
+import ModelSelect from "./components/ModelSelect";
+import ErrorBox, { isRegionError } from "./components/ErrorBox";
 import SessionChat from "./components/SessionChat";
 import CharacterModal from "./components/CharacterModal";
+import LayoutEditor from "./layout/LayoutEditor";
 import { type CharacterLook, loadCharacters, saveCharacters } from "./characters";
 import { displayTitle } from "./format";
+import { ROLE_BY_ID, TEAM_ROLE_DEFS, TEAM_ROLE_METHODS, JEFE_DONE_TEXT, readJefeReadiness } from "./teamRoles";
+
+const MANAGER_AGENTS = ["plan", "build"] as const;
+
+const JEFE_PROMPT_REMINDER =
+  "\n\n[ROL JEFE] No respondas que estás en modo plan ni en solo lectura. Resuelve la duda o pregunta del usuario y, si falta información, pídela. Termina siempre con una línea exacta: LISTO PARA PASAR AL EQUIPO: SÍ o LISTO PARA PASAR AL EQUIPO: NO. No implementes código.";
 
 const THEMES: Array<{ id: ThemeName; label: string }> = [
   { id: "fuego", label: "FUEGO" },
@@ -65,12 +76,122 @@ function normalizeDir(value: string | undefined): string {
   return (value ?? "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }
 
+function isManagerAgent(name: string | undefined): boolean {
+  return MANAGER_AGENTS.some((candidate) => candidate === name);
+}
+
+type SeatAssignments = Record<string, number>;
+
+const SEAT_LAYOUT_VERSION = "5-roles-32";
+
+function loadSeatAssignments(): SeatAssignments {
+  try {
+    if (window.localStorage.getItem("pixel-office-seats-version") !== SEAT_LAYOUT_VERSION) {
+      window.localStorage.removeItem("pixel-office-seats");
+      window.localStorage.setItem("pixel-office-seats-version", SEAT_LAYOUT_VERSION);
+      return {};
+    }
+    const raw = window.localStorage.getItem("pixel-office-seats");
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const result: SeatAssignments = {};
+    for (const [id, value] of Object.entries(parsed)) {
+      if (Number.isInteger(value) && (value as number) >= 0 && (value as number) < SEAT_OPTIONS.length) {
+        result[id] = value as number;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+type IntendedMap = Record<string, { agent?: string; model?: ModelInfo }>;
+
+function loadIntended(): IntendedMap {
+  try {
+    const raw = window.localStorage.getItem("pixel-office-intended");
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const result: IntendedMap = {};
+    for (const [id, value] of Object.entries(parsed)) {
+      if (!value || typeof value !== "object") continue;
+      const item = value as { agent?: unknown; model?: unknown };
+      const entry: { agent?: string; model?: ModelInfo } = {};
+      if (typeof item.agent === "string") entry.agent = item.agent;
+      if (item.model && typeof item.model === "object") {
+        const model = item.model as Partial<ModelInfo>;
+        if (typeof model.providerID === "string" && typeof model.modelID === "string") {
+          entry.model = {
+            providerID: model.providerID,
+            modelID: model.modelID,
+            providerName: String(model.providerName ?? ""),
+            label: String(model.label ?? model.modelID)
+          };
+        }
+      }
+      result[id] = entry;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+function parseModelKey(value: string): { providerID: string; modelID: string } | undefined {
+  if (!value) return undefined;
+  const [providerID, modelID] = value.split("::");
+  return providerID && modelID ? { providerID, modelID } : undefined;
+}
+
+type ErrorLike = {
+  name?: string;
+  message?: string;
+  data?: { message?: string };
+};
+
+function errorMessage(error: unknown): string {
+  if (!error) return "error";
+  if (typeof error === "string") return error.slice(0, 2000);
+  const value = error as ErrorLike;
+  return (value.data?.message ?? value.message ?? value.name ?? "error").slice(0, 2000);
+}
+
 function textOf(parts: ChatPart[]): string {
   return parts
     .filter((part) => part.type === "text")
     .map((part) => part.text ?? "")
     .join("");
 }
+
+function lastAssistantText(messages: ChatMessage[]): string {
+  const short: string[] = [];
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const text = textOf(message.parts).trim();
+    if (!text) continue;
+    if (text.length >= 500 || /(^|\n)#{1,3}\s*plan\b/i.test(text)) return text;
+    short.push(text);
+  }
+  return short[0] ?? "";
+}
+
+function latestAssistantText(messages: ChatMessage[]): string {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const text = textOf(message.parts).trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+type HandoffCycle = {
+  area: string;
+  jefe: string;
+  targets: string[];
+  startedAt: number;
+};
 
 export default function App() {
   const [boot, setBoot] = useState<Bootstrap | null>(null);
@@ -82,15 +203,26 @@ export default function App() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [diffs, setDiffs] = useState<Record<string, DiffStat>>({});
   const [transcripts, setTranscripts] = useState<Record<string, ChatMessage[]>>({});
-  const [intended, setIntended] = useState<Record<string, { agent?: string; model?: ModelInfo }>>({});
+  const [intended, setIntended] = useState<IntendedMap>(loadIntended);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [link, setLink] = useState<"connecting" | "live" | "reconnecting" | "offline">("connecting");
   const [theme, setTheme] = useState<ThemeName>(initialTheme);
+  const [breaksEnabled, setBreaksEnabled] = useState(() => window.localStorage.getItem("pixel-office-breaks") !== "off");
+  const [managerOverride, setManagerOverride] = useState<string | null>(() =>
+    window.localStorage.getItem("pixel-office-manager")
+  );
+  const [seatAssignments, setSeatAssignments] = useState<SeatAssignments>(loadSeatAssignments);
+  const [seatByAgent, setSeatByAgent] = useState<Record<string, number>>({});
   const [spawned, setSpawned] = useState<Record<string, number>>({});
   const [tab, setTab] = useState<"team" | "chat">("team");
   const [modalOpen, setModalOpen] = useState(false);
+  const [teamModalOpen, setTeamModalOpen] = useState(false);
+  const [layoutOpen, setLayoutOpen] = useState(false);
+  const [teamNotice, setTeamNotice] = useState<string | null>(null);
+  const [localMessages, setLocalMessages] = useState<Record<string, ChatMessage[]>>({});
+  const [handoffCycle, setHandoffCycle] = useState<HandoffCycle | null>(null);
   const [characters, setCharacters] = useState<Record<string, CharacterLook>>(loadCharacters);
   const [editingCharacter, setEditingCharacter] = useState<string | null>(null);
   const [opcDown, setOpcDown] = useState(false);
@@ -115,9 +247,33 @@ export default function App() {
     });
   };
 
+  const toggleBreaks = () => {
+    setBreaksEnabled((current) => {
+      const next = !current;
+      window.localStorage.setItem("pixel-office-breaks", next ? "on" : "off");
+      return next;
+    });
+  };
+
   const retryBootstrap = () => {
     setBootFailed(false);
     setBootTick((current) => current + 1);
+  };
+
+  const assignManager = (id: string | null) => {
+    setManagerOverride(id);
+    if (id) window.localStorage.setItem("pixel-office-manager", id);
+    else window.localStorage.removeItem("pixel-office-manager");
+  };
+
+  const assignSeat = (agentId: string, seat: number | null) => {
+    setSeatAssignments((prev) => {
+      const next = { ...prev };
+      if (seat === null) delete next[agentId];
+      else next[agentId] = seat;
+      window.localStorage.setItem("pixel-office-seats", JSON.stringify(next));
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -183,6 +339,17 @@ export default function App() {
   useEffect(() => {
     saveCharacters(characters);
   }, [characters]);
+
+  useEffect(() => {
+    window.localStorage.setItem("pixel-office-intended", JSON.stringify(intended));
+  }, [intended]);
+
+  useEffect(() => {
+    if (!boot || !managerOverride) return;
+    if (sessions[managerOverride]) return;
+    setManagerOverride(null);
+    window.localStorage.removeItem("pixel-office-manager");
+  }, [boot, managerOverride, sessions]);
 
   useEffect(() => {
     let alive = true;
@@ -260,6 +427,14 @@ export default function App() {
 
   const forgetSession = (id: string) => {
     sessionDirsRef.current.delete(id);
+    const agentKey = `oc:${id}`;
+    setSeatAssignments((prev) => {
+      if (!(agentKey in prev)) return prev;
+      const next = { ...prev };
+      delete next[agentKey];
+      window.localStorage.setItem("pixel-office-seats", JSON.stringify(next));
+      return next;
+    });
     const remove = <T,>(prev: Record<string, T>): Record<string, T> => {
       if (!(id in prev)) return prev;
       const next = { ...prev };
@@ -294,7 +469,7 @@ export default function App() {
     const props = event.properties ?? {};
 
     if (type === "server.connected") {
-      setBootTick((current) => current + 1);
+      if (bootFailedRef.current) setBootTick((current) => current + 1);
       return;
     }
 
@@ -356,7 +531,7 @@ export default function App() {
     if (type === "session.error") {
       const sessionID = String(props.sessionID ?? "");
       if (!sessionID || !sessionAllowed(sessionID)) return;
-      const error = props.error?.name ?? "error";
+      const error = errorMessage(props.error);
       setErrors((prev) => ({ ...prev, [sessionID]: error }));
       return;
     }
@@ -365,7 +540,9 @@ export default function App() {
       const info = props.info;
       if (!info?.sessionID) return;
       if (!sessionAllowed(info.sessionID)) return;
+      const apiError = info.error ? errorMessage(info.error) : null;
       setErrors((prev) => {
+        if (apiError) return { ...prev, [info.sessionID]: apiError };
         if (!prev[info.sessionID]) return prev;
         const next = { ...prev };
         delete next[info.sessionID];
@@ -534,18 +711,145 @@ export default function App() {
     [sessions]
   );
   const roots = allSessions.filter((s) => !s.parentID || !sessions[s.parentID]);
+  const teamAreasList = [...new Set(SEAT_OPTIONS.filter((option) => option.role).map((option) => option.area))];
+  const detectedTeams = useMemo(() => {
+    const byArea = new Map<string, Map<SeatRole, string>>();
+    for (const session of allSessions) {
+      if (session.parentID) continue;
+      const title = session.title ?? "";
+      for (const area of teamAreasList) {
+        const prefix = `${area} · `;
+        if (!title.startsWith(prefix)) continue;
+        const suffix = title.slice(prefix.length).trim();
+        const definition = TEAM_ROLE_DEFS.find((item) => item.title === suffix);
+        if (!definition) continue;
+        const roles = byArea.get(area) ?? new Map<SeatRole, string>();
+        roles.set(definition.role, session.id);
+        byArea.set(area, roles);
+      }
+    }
+    const complete = [...byArea.entries()].filter(([, roles]) =>
+      TEAM_ROLE_DEFS.every((definition) => roles.has(definition.role))
+    ) as Array<[string, Map<SeatRole, string>]>;
+    const bySession = new Map<string, { area: string; roles: Map<SeatRole, string> }>();
+    const rootTeam = new Map<string, { area: string; roles: Map<SeatRole, string> }>();
+    for (const [area, roles] of complete) {
+      const team = { area, roles };
+      for (const id of roles.values()) {
+        bySession.set(id, team);
+        rootTeam.set(id, team);
+      }
+    }
+    const subagents: string[] = [];
+    for (const session of allSessions) {
+      if (!session.parentID) continue;
+      let cursor = session;
+      const seen = new Set<string>();
+      while (cursor.parentID && sessions[cursor.parentID] && !seen.has(cursor.id)) {
+        seen.add(cursor.id);
+        cursor = sessions[cursor.parentID];
+      }
+      const team = rootTeam.get(cursor.id);
+      if (team) {
+        bySession.set(session.id, team);
+        subagents.push(session.id);
+      }
+    }
+    return {
+      teams: complete.map(([area, roles]) => ({ area, roles })),
+      bySession,
+      subagents
+    };
+  }, [allSessions]);
+  useEffect(() => {
+    if (detectedTeams.subagents.length === 0) return;
+    const go = models.find(
+      (model) => model.providerID === "opencode-go" && model.modelID === "deepseek-v4.1-flash"
+    );
+    if (!go) return;
+    setIntended((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of detectedTeams.subagents) {
+        const current = prev[id]?.model;
+        if (current?.providerID === go.providerID && current.modelID === go.modelID) continue;
+        next[id] = { ...prev[id], model: { ...go } };
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [detectedTeams, models]);
+  useEffect(() => {
+    if (!handoffCycle) return;
+    const ids = new Set(handoffCycle.targets);
+    for (const [id, team] of detectedTeams.bySession) {
+      if (team.area === handoffCycle.area && id !== handoffCycle.jefe) ids.add(id);
+    }
+    const active = [...ids].some((id) => {
+      const status = statuses[id];
+      return status?.type === "busy" || status?.type === "retry" || Boolean(permissions[id]);
+    });
+    if (active) return;
+    const delay = Math.max(1500, 4000 - (Date.now() - handoffCycle.startedAt));
+    const timer = window.setTimeout(() => {
+      const jefe = handoffCycle.jefe;
+      const messageId = `jefe-done-${handoffCycle.startedAt}`;
+      const jefeIntended = intended[jefe];
+      const jefeMeta = meta[jefe];
+      setLocalMessages((prev) => {
+        const list = prev[jefe] ?? [];
+        if (list.some((message) => message.id === messageId)) return prev;
+        const message: ChatMessage = {
+          id: messageId,
+          role: "assistant",
+          agent: jefeIntended?.agent ?? jefeMeta?.agent ?? "plan",
+          model: jefeIntended?.model?.modelID ?? jefeMeta?.model,
+          provider: jefeIntended?.model?.providerID ?? jefeMeta?.provider,
+          created: Date.now(),
+          parts: [{ id: `${messageId}-text`, type: "text", text: JEFE_DONE_TEXT }]
+        };
+        return { ...prev, [jefe]: [...list, message] };
+      });
+      setTeamNotice(JEFE_DONE_TEXT);
+      setHandoffCycle(null);
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [handoffCycle, statuses, permissions, detectedTeams, intended, meta]);
+  const sessionActive = (id: string) =>
+    statuses[id]?.type === "busy" ||
+    statuses[id]?.type === "retry" ||
+    Boolean(permissions[id]) ||
+    Boolean(errors[id]);
+  const visibleSessions = useMemo(
+    () =>
+      allSessions.filter(
+        (session) =>
+          !session.parentID ||
+          !sessions[session.parentID] ||
+          session.id === selected ||
+          sessionActive(session.id)
+      ),
+    [allSessions, sessions, selected, statuses, permissions, errors]
+  );
   const busyCount =
     allSessions.filter((s) => statuses[s.id]?.type === "busy" || permissions[s.id]).length +
     liveAgents.filter((agent) => agent.status !== "idle").length;
   const agentByName = useMemo(() => new Map(agents.map((agent) => [agent.name, agent])), [agents]);
   const managerId = useMemo(() => {
     const roots = Object.values(sessions).filter((session) => !session.parentID || !sessions[session.parentID]);
-    const priority = ["orquestador", "plan", "build"];
-    const preferred = priority
-      .map((name) => roots.find((session) => meta[session.id]?.agent === name || intended[session.id]?.agent === name))
-      .find(Boolean);
-    return preferred?.id ?? roots.sort((a, b) => a.time.created - b.time.created)[0]?.id ?? null;
-  }, [sessions, meta, intended]);
+    const eligible = roots.filter((session) =>
+      isManagerAgent(meta[session.id]?.agent ?? intended[session.id]?.agent)
+    );
+    if (managerOverride && eligible.some((session) => session.id === managerOverride)) {
+      return managerOverride;
+    }
+    const preferred = MANAGER_AGENTS.map((name) =>
+      eligible
+        .filter((session) => meta[session.id]?.agent === name || intended[session.id]?.agent === name)
+        .sort((a, b) => a.time.created - b.time.created)[0]
+    ).find(Boolean);
+    return preferred?.id ?? null;
+  }, [sessions, meta, intended, managerOverride]);
 
   const selectedSession = selected ? sessions[selected] : null;
   const selectedStatus = selected ? statuses[selected] : undefined;
@@ -558,9 +862,246 @@ export default function App() {
   const selectedBusy = Boolean(
     selected && (selectedStatus?.type === "busy" || selectedStatus?.type === "retry" || selectedPermission)
   );
+  const chatBusyLabel = !selectedBusy
+    ? ""
+    : selectedPermission
+      ? "Esperando permiso…"
+      : selectedStatus?.type === "retry"
+        ? "Reintentando…"
+        : ["edit", "write", "patch", "multiedit"].includes(selectedActivity?.tool ?? "")
+          ? "Editando archivos…"
+          : ["bash", "shell"].includes(selectedActivity?.tool ?? "")
+            ? "Ejecutando comando…"
+            : ["read", "grep", "glob", "list", "webfetch"].includes(selectedActivity?.tool ?? "")
+              ? "Revisando archivos…"
+              : "Pensando…";
   const chatAgent = selectedIntended?.agent ?? selectedMeta?.agent;
+  const canAssignManager = Boolean(
+    selectedSession &&
+      roots.some((session) => session.id === selectedSession.id) &&
+      isManagerAgent(chatAgent)
+  );
+  const selectedKey = selected ? `oc:${selected}` : null;
+  const assignedSeat = selectedKey ? seatAssignments[selectedKey] : undefined;
+  const currentSeat = selectedKey ? seatByAgent[selectedKey] : undefined;
+  const seatOwners = useMemo(() => {
+    const owners = new Map<number, string>();
+    for (const [id, seat] of Object.entries(seatByAgent)) owners.set(seat, id);
+    return owners;
+  }, [seatByAgent]);
+  const teamAreas = useMemo(() => {
+    const names = [...new Set(SEAT_OPTIONS.filter((option) => option.role).map((option) => option.area))];
+    return names.map((name) => {
+      const seats = SEAT_OPTIONS.filter((option) => option.area === name && option.role).map(
+        (option) => option.index
+      );
+      const occupied = seats.filter((index) => seatOwners.has(index)).length;
+      return {
+        name,
+        available: occupied === 0,
+        reason:
+          occupied > 0
+            ? `${name} tiene ${occupied} de ${seats.length} puestos ocupados. Libera esos puestos para crear el equipo.`
+            : undefined
+      };
+    });
+  }, [seatOwners]);
+  const teamPinnedAgents = useMemo(() => {
+    const pinned = new Set<string>();
+    const areas = [...new Set(SEAT_OPTIONS.filter((option) => option.role).map((option) => option.area))];
+    for (const area of areas) {
+      const seats = SEAT_OPTIONS.filter((option) => option.area === area && option.role).map(
+        (option) => option.index
+      );
+      const owners = seats.map(
+        (index) =>
+          Object.entries(seatByAgent).find(
+            ([id, seat]) => seat === index && id.startsWith("oc:")
+          )?.[0]
+      );
+      if (owners.every(Boolean) && new Set(owners).size === seats.length) {
+        for (const owner of owners) {
+          if (owner) pinned.add(owner);
+        }
+      }
+    }
+    for (const team of detectedTeams.teams) {
+      for (const id of team.roles.values()) pinned.add(`oc:${id}`);
+    }
+    return pinned;
+  }, [seatByAgent, detectedTeams]);
+  useEffect(() => {
+    if (detectedTeams.teams.length === 0) return;
+    setSeatAssignments((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      const owners = new Map<number, string>();
+      for (const [id, seat] of Object.entries(seatByAgent)) owners.set(seat, id);
+      for (const team of detectedTeams.teams) {
+        const memberKeys = new Set([...team.roles.values()].map((id) => `oc:${id}`));
+        const seats = TEAM_ROLE_DEFS.map((definition) => ({
+          role: definition.role,
+          id: team.roles.get(definition.role),
+          seat: SEAT_OPTIONS.find((option) => option.area === team.area && option.role === definition.role)
+        }));
+        if (seats.some((item) => !item.id || !item.seat)) continue;
+        const conflict = seats.some((item) => {
+          const owner = owners.get(item.seat!.index);
+          return owner && !memberKeys.has(owner);
+        });
+        if (conflict) continue;
+        for (const item of seats) {
+          const key = `oc:${item.id}`;
+          const index = item.seat!.index;
+          if (next[key] !== index) {
+            next[key] = index;
+            changed = true;
+          }
+        }
+      }
+      if (!changed) return prev;
+      window.localStorage.setItem("pixel-office-seats", JSON.stringify(next));
+      return next;
+    });
+  }, [detectedTeams, seatByAgent]);
+  const selectedTeam = selected ? detectedTeams.bySession.get(selected) : undefined;
+  const isTeamJefe = Boolean(selected && selectedTeam?.roles.get("plan") === selected);
+  const selectedPinned = selectedKey ? teamPinnedAgents.has(selectedKey) : false;
+  const selectedSeatOption = currentSeat !== undefined ? SEAT_OPTIONS[currentSeat] : undefined;
+  const isJefeSelected = isTeamJefe || selectedSeatOption?.role === "plan";
+  const planText = selected ? lastAssistantText(transcripts[selected] ?? []) : "";
+  const latestJefeText = selected ? latestAssistantText(transcripts[selected] ?? []) : "";
+  const jefeReady = isJefeSelected ? readJefeReadiness(latestJefeText) : null;
+  const handoffTargets = useMemo(() => {
+    if (selectedTeam) {
+      return TEAM_ROLE_DEFS.filter((definition) => definition.role !== "plan").flatMap(
+        (definition) => {
+          const sessionId = selectedTeam.roles.get(definition.role);
+          return sessionId ? [{ sessionId, role: definition.role }] : [];
+        }
+      );
+    }
+    if (!selectedSeatOption || selectedSeatOption.role !== "plan") return [];
+    const bySeat = new Map<number, string>();
+    for (const [agentId, seat] of Object.entries(seatByAgent)) {
+      if (agentId.startsWith("oc:")) bySeat.set(seat, agentId.slice(3));
+    }
+    return SEAT_OPTIONS.flatMap((option) => {
+      if (option.area !== selectedSeatOption.area || !option.role || option.role === "plan") {
+        return [];
+      }
+      const sessionId = bySeat.get(option.index);
+      return sessionId ? [{ sessionId, role: option.role }] : [];
+    });
+  }, [selectedTeam, selectedSeatOption, seatByAgent]);
   const chatModel = selectedIntended?.model?.modelID ?? selectedMeta?.model;
-  const chatMessages = selected ? transcripts[selected] ?? [] : [];
+  const chatMessages = useMemo(() => {
+    if (!selected) return [];
+    return [...(transcripts[selected] ?? []), ...(localMessages[selected] ?? [])].sort(
+      (a, b) => a.created - b.created
+    );
+  }, [selected, transcripts, localMessages]);
+  const selectedModelKey = selectedIntended?.model
+    ? `${selectedIntended.model.providerID}::${selectedIntended.model.modelID}`
+    : "";
+
+  const setSessionModel = (id: string, key: string) => {
+    const model = parseModelKey(key);
+    setIntended((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        model: model ? ({ ...model, providerName: "", label: model.modelID } as ModelInfo) : undefined
+      }
+    }));
+    setMeta((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], model: model?.modelID, provider: model?.providerID }
+    }));
+  };
+
+  const setSessionAgent = (id: string, agent: string) => {
+    setIntended((prev) => ({ ...prev, [id]: { ...prev[id], agent } }));
+    setMeta((prev) => ({ ...prev, [id]: { ...prev[id], agent } }));
+  };
+
+  const useGoForTeam = (): boolean => {
+    if (!selectedTeam) return false;
+    let changed = 0;
+    let already = 0;
+    const missing: string[] = [];
+    for (const definition of TEAM_ROLE_DEFS) {
+      const id = selectedTeam.roles.get(definition.role);
+      if (!id) continue;
+      const current = intended[id]?.model?.modelID ?? meta[id]?.model;
+      const currentProvider = intended[id]?.model?.providerID ?? meta[id]?.provider;
+      if (currentProvider === "opencode-go") {
+        already += 1;
+        continue;
+      }
+      const candidate = current
+        ? models.find((model) => model.providerID === "opencode-go" && model.modelID === current)
+        : undefined;
+      if (candidate) {
+        setSessionModel(id, `${candidate.providerID}::${candidate.modelID}`);
+        changed += 1;
+      } else {
+        missing.push(definition.title);
+      }
+    }
+    if (changed > 0) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        let touched = false;
+        for (const id of selectedTeam.roles.values()) {
+          if (next[id]) {
+            delete next[id];
+            touched = true;
+          }
+        }
+        return touched ? next : prev;
+      });
+    }
+    setTeamNotice(
+      changed > 0
+        ? `OpenCode Go aplicado a ${changed} miembro(s)${
+            missing.length ? `; sin equivalente Go: ${missing.join(", ")}` : ""
+          }.`
+        : already > 0
+          ? "El equipo ya usa OpenCode Go; revisa el saldo de Go."
+          : "No hay modelos equivalentes de OpenCode Go para este equipo."
+    );
+    return changed > 0;
+  };
+  const regionalFallbackFor = (id: string): string | null => {
+    const current = intended[id]?.model?.modelID ?? meta[id]?.model;
+    if (!current) return null;
+    const candidate =
+      models.find((model) => model.providerID === "opencode" && model.modelID === current) ??
+      models.find((model) => model.providerID !== "opencode-go" && model.modelID === current);
+    return candidate ? `${candidate.providerID}::${candidate.modelID}` : null;
+  };
+
+  const useRegionalModel = (id: string): boolean => {
+    const key = regionalFallbackFor(id);
+    if (!key) return false;
+    setSessionModel(id, key);
+    setErrors((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    return true;
+  };
+
+  const selectedRegionalAction =
+    selected && selectedError && isRegionError(selectedError) && regionalFallbackFor(selected)
+      ? {
+          label: "Usar modelo regional",
+          onClick: () => useRegionalModel(selected)
+        }
+      : undefined;
 
   const selectSession = (id: string) => {
     setSelected(id);
@@ -579,7 +1120,7 @@ export default function App() {
       logs: agent.logs.map((log) => log.message)
     }));
 
-    for (const session of allSessions) {
+    for (const session of visibleSessions) {
       const st = statuses[session.id];
       const act = activity[session.id];
       const err = errors[session.id];
@@ -615,7 +1156,7 @@ export default function App() {
     }
 
     return list;
-  }, [liveAgents, allSessions, statuses, activity, errors, permissions, transcripts, characters, meta, spawned, managerId]);
+  }, [liveAgents, visibleSessions, statuses, activity, errors, permissions, transcripts, characters, meta, spawned, managerId]);
 
   useEffect(() => {
     setExternalSelected((current) =>
@@ -632,6 +1173,7 @@ export default function App() {
     const title =
       input.title || input.text.replace(/\s+/g, " ").slice(0, 48).trim() || `Sesión ${new Date().toISOString().slice(11, 19)}`;
     const session = await createSession(title);
+    sessionDirsRef.current.set(session.id, session.directory);
     await promptSession(session.id, { text: input.text, agent: input.agent, model: input.model });
     setSessions((prev) => ({ ...prev, [session.id]: session }));
     setSpawned((prev) => ({ ...prev, [session.id]: Date.now() }));
@@ -649,16 +1191,214 @@ export default function App() {
     setModalOpen(false);
   };
 
+  const TEAM_ROLES = TEAM_ROLE_DEFS.map((definition) => ({
+    role: definition.role,
+    title: definition.title,
+    starts: definition.role === "plan",
+    text:
+      definition.role === "plan"
+        ? "Eres el Jefe de Planificación del área. No respondas que estás en modo plan (solo lectura) ni expliques limitaciones de permisos. Tu trabajo es resolver todas las dudas y preguntas del usuario, cerrar el alcance, los criterios de aceptación y dividir el trabajo por rol: Frontend (UI, botones, estilos), Backend (lógica, API, datos), QA (pruebas, aceptación) y Documentación (docs y Scrum). Antes de repartir, confirma que no quedan dudas. En cada respuesta termina con una línea exacta: LISTO PARA PASAR AL EQUIPO: SÍ o LISTO PARA PASAR AL EQUIPO: NO. Usa NO mientras falte algo; usa SÍ solo cuando el plan esté cerrado. No implementes código."
+        : definition.brief
+  }));
+
+  const createTeam = async (input: {
+    area: string;
+    roles: Array<{
+      role: "plan" | "frontend" | "backend" | "qa" | "docs";
+      method: "plan" | "build";
+      model: string;
+    }>;
+  }) => {
+    const seats = SEAT_OPTIONS.filter((option) => option.area === input.area && option.role);
+    if (seats.length !== TEAM_ROLES.length) throw new Error("El área no tiene los cinco puestos.");
+    if (seats.some((seat) => seatOwners.has(seat.index))) {
+      throw new Error("El área tiene puestos ocupados. Libéralos antes de crear el equipo.");
+    }
+    const byRole = new Map(input.roles.map((item) => [item.role, item]));
+
+    const parseModel = (key: string, agent: string) => {
+      if (key) {
+        const [providerID, modelID] = key.split("::");
+        if (providerID && modelID) return { providerID, modelID };
+      }
+      return agents.find((item) => item.name === agent)?.model;
+    };
+
+    const specs = TEAM_ROLES.map((definition) => {
+      const seat = seats.find((item) => item.role === definition.role);
+      const roleInput = byRole.get(definition.role);
+      if (!seat || !roleInput) throw new Error(`Falta la configuración de ${definition.title}.`);
+      return {
+        seat,
+        agent: roleInput.method,
+        modelKey: roleInput.model,
+        title: definition.title,
+        starts: definition.starts,
+        text: `Eres ${definition.title} del área ${input.area}. ${definition.text}`
+      };
+    });
+
+    const assignments: Record<string, number> = {};
+    try {
+      for (const spec of specs) {
+        const session = await createSession(`${input.area} · ${spec.title}`);
+        sessionDirsRef.current.set(session.id, session.directory);
+        assignments[`oc:${session.id}`] = spec.seat.index;
+        const model = parseModel(spec.modelKey, spec.agent);
+        setSessions((prev) => ({ ...prev, [session.id]: session }));
+        setSpawned((prev) => ({ ...prev, [session.id]: Date.now() }));
+        setStatuses((prev) => ({
+          ...prev,
+          [session.id]: { type: spec.starts ? "busy" : "idle" }
+        }));
+        setMeta((prev) => ({
+          ...prev,
+          [session.id]: {
+            agent: spec.agent,
+            model: model?.modelID,
+            provider: model?.providerID
+          }
+        }));
+        setIntended((prev) => ({
+          ...prev,
+          [session.id]: {
+            agent: spec.agent,
+            model: model ? ({ ...model, providerName: "", label: model.modelID } as ModelInfo) : undefined
+          }
+        }));
+        if (spec.starts) {
+          await promptSession(session.id, {
+            text: spec.text,
+            agent: spec.agent,
+            model
+          });
+        }
+      }
+      const firstSession = Object.keys(assignments)[0];
+      if (firstSession) {
+        setSelected(firstSession.slice(3));
+        setTab("chat");
+      }
+      setTeamModalOpen(false);
+    } finally {
+      if (Object.keys(assignments).length > 0) {
+        setSeatAssignments((prev) => {
+          const next = { ...prev, ...assignments };
+          window.localStorage.setItem("pixel-office-seats", JSON.stringify(next));
+          return next;
+        });
+      }
+    }
+  };
+
   const sendPrompt = async (text: string) => {
     if (!selected) return;
-    await promptSession(selected, {
-      text,
-      agent: chatAgent,
-      model: selectedIntended?.model
-        ? { providerID: selectedIntended.model.providerID, modelID: selectedIntended.model.modelID }
-        : undefined
+    const id = selected;
+    setStatuses((prev) => ({ ...prev, [id]: { type: "busy" } }));
+    setErrors((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
     });
+    try {
+      await promptSession(id, {
+        text: `${text}${isJefeSelected ? JEFE_PROMPT_REMINDER : ""}`,
+        agent: chatAgent,
+        model: selectedIntended?.model
+          ? { providerID: selectedIntended.model.providerID, modelID: selectedIntended.model.modelID }
+          : undefined
+      });
+    } catch (err) {
+      setStatuses((prev) => ({ ...prev, [id]: { type: "idle" } }));
+      throw err;
+    }
   };
+
+  const runHandoff = async () => {
+    if (!selected) return;
+    const area = selectedTeam?.area ?? selectedSeatOption?.area;
+    if (!area) return;
+    if (!planText) throw new Error("El jefe todavía no tiene un plan en el chat.");
+    if (handoffTargets.length < 4) {
+      throw new Error("Asigna Frontend, Backend, QA y Documentación en esta área.");
+    }
+    const plan = planText.slice(0, 6200);
+    const results = await Promise.allSettled(
+      handoffTargets.map((target) => {
+        const targetPlan = intended[target.sessionId];
+        const agent = targetPlan?.agent ?? TEAM_ROLE_METHODS[target.role] ?? meta[target.sessionId]?.agent;
+        const definition = ROLE_BY_ID.get(target.role);
+        const role = definition
+          ? `${definition.title}: ${definition.handoff}`
+          : "Trabaja solo en tu especialidad.";
+        const text = `El jefe de ${area} ha cerrado el plan.\n\nTu rol: ${role}\n\nNo cambies de especialidad ni hagas el trabajo de otro rol.\n\nPLAN:\n${plan}`;
+        return promptSession(target.sessionId, {
+          text,
+          agent,
+          model: targetPlan?.model
+            ? { providerID: targetPlan.model.providerID, modelID: targetPlan.model.modelID }
+            : undefined
+        });
+      })
+    );
+    const sent: typeof handoffTargets = [];
+    const failed: string[] = [];
+    results.forEach((result, index) => {
+      const target = handoffTargets[index];
+      if (result.status === "fulfilled") {
+        sent.push(target);
+      } else {
+        const label = ROLE_BY_ID.get(target.role)?.title ?? target.role;
+        failed.push(`${label}: ${errorMessage(result.reason)}`);
+      }
+    });
+    setStatuses((prev) => {
+      const next = { ...prev };
+      for (const target of sent) next[target.sessionId] = { type: "busy" };
+      return next;
+    });
+    if (sent.length > 0) {
+      setTeamNotice(null);
+      setHandoffCycle({
+        area,
+        jefe: selected,
+        targets: sent.map((target) => target.sessionId),
+        startedAt: Date.now()
+      });
+    }
+    if (failed.length > 0) {
+      throw new Error(`Plan enviado a ${sent.length}/4. Falló ${failed.join(" · ")}`);
+    }
+  };
+
+  const handoffBusyTargets = handoffTargets.filter((target) => {
+    const status = statuses[target.sessionId];
+    return status?.type === "busy" || status?.type === "retry";
+  });
+  const handoffBusyLabel = handoffBusyTargets
+    .map((target) => ROLE_BY_ID.get(target.role)?.title ?? target.role)
+    .join(", ");
+  const handoffArea = selectedTeam?.area ?? selectedSeatOption?.area;
+  const handoff =
+    (isTeamJefe || selectedSeatOption?.role === "plan") && handoffArea
+      ? {
+          disabled: !planText || handoffTargets.length < 4,
+          ready: jefeReady,
+          hint: !planText
+            ? "Primero cierra un plan con el jefe en el chat."
+            : handoffTargets.length < 4
+              ? "Asigna Frontend, Backend, QA y Documentación en esta área."
+              : handoffBusyTargets.length > 0
+                ? `${handoffBusyLabel} está ocupado; el plan se enviará igualmente y puede quedar en cola.`
+                : jefeReady === null
+                  ? "Pide al jefe el estado: LISTO PARA PASAR AL EQUIPO: SÍ/NO."
+                  : jefeReady === false
+                    ? "El jefe indicó que aún NO está listo; resuelve las dudas pendientes."
+                    : `Enviar el plan a Frontend, Backend, QA y Documentación de ${handoffArea}.`,
+          onRun: runHandoff
+        }
+      : undefined;
 
   const removeSelected = async () => {
     if (!selected) return;
@@ -681,8 +1421,17 @@ export default function App() {
         <button type="button" className="pill accent-btn" onClick={() => setModalOpen(true)}>
           + NUEVA SESIÓN
         </button>
+        <button type="button" className="pill theme-btn" onClick={() => setTeamModalOpen(true)}>
+          CREAR EQUIPO
+        </button>
+        <button type="button" className="pill theme-btn" onClick={() => setLayoutOpen(true)}>
+          EDITAR OFICINA
+        </button>
         <button type="button" className="pill theme-btn" onClick={cycleTheme}>
           TEMA: {THEMES.find((item) => item.id === theme)?.label ?? "FUEGO"}
+        </button>
+        <button type="button" className="pill theme-btn" onClick={toggleBreaks}>
+          PAUSAS: {breaksEnabled ? "SÍ" : "NO"}
         </button>
         <span className="pill">
           <span className={`dot ${linkClass}`} />
@@ -722,6 +1471,10 @@ export default function App() {
           <SceneCanvas
             agents={sceneAgents}
             theme={theme}
+            breaksEnabled={breaksEnabled}
+            seatAssignments={seatAssignments}
+            onSeatsChange={setSeatByAgent}
+            pinnedAgents={teamPinnedAgents}
             selectedId={externalSelected?.id ?? (selected ? `oc:${selected}` : null)}
             onSelect={(id) => {
               if (id.startsWith("oc:")) {
@@ -800,7 +1553,7 @@ export default function App() {
                     </div>
                   );
                 })}
-                {allSessions.map((session) => {
+                {visibleSessions.map((session) => {
                   const kind = statusKind(statuses[session.id], errors[session.id]);
                   const agentName = meta[session.id]?.agent ?? intended[session.id]?.agent;
                   const agentMode = agentName ? agentByName.get(agentName)?.mode : undefined;
@@ -812,7 +1565,7 @@ export default function App() {
                     >
                       <span className={`chip ${kind}`} />
                       <span className="name">
-                        {session.parentID ? "↳ " : ""}
+                        {session.parentID ? "â†³ " : ""}
                         {nameFor(session)}
                       </span>
                       <span className="tag">{agentName ?? (session.parentID ? "sub" : "root")}</span>
@@ -820,7 +1573,7 @@ export default function App() {
                     </div>
                   );
                 })}
-                {allSessions.length === 0 && <div className="hint">Sin sesiones registradas.</div>}
+                {visibleSessions.length === 0 && <div className="hint">Sin sesiones registradas.</div>}
               </div>
 
               {selectedSession ? (
@@ -833,15 +1586,88 @@ export default function App() {
                     <b>{selectedSession.parentID ? shortId(selectedSession.parentID) : "—"}</b>
                     <span>estado</span>
                     <b>{selectedStatus?.type ?? "idle"}</b>
-                    <span>agente</span>
-                    <b>{chatAgent ?? "—"}</b>
+                    <span>método</span>
+                    <select
+                      className="seat-select"
+                      value={chatAgent ?? ""}
+                      onChange={(event) => {
+                        if (selected) setSessionAgent(selected, event.target.value);
+                      }}
+                    >
+                      {agents
+                        .filter((agent) => !["compaction", "summary", "title"].includes(agent.name))
+                        .map((agent) => (
+                          <option key={agent.name} value={agent.name}>
+                            {agent.name} · {agent.mode}
+                          </option>
+                        ))}
+                    </select>
                     <span>modelo</span>
-                    <b>{chatModel ?? "—"}</b>
+                    <ModelSelect
+                      className="seat-select"
+                      models={models}
+                      value={selectedModelKey}
+                      onChange={(value) => {
+                        if (selected) setSessionModel(selected, value);
+                      }}
+                    />
                     <span>tokens</span>
                     <b>{selectedMeta?.tokens ?? "—"}</b>
                     <span>directorio</span>
                     <b>{selectedSession.directory}</b>
+                    <span>manager</span>
+                    <b>{selectedSession.id === managerId ? "sí" : "no"}</b>
+                    <span>equipo</span>
+                    <b>{selectedPinned ? "fijo en la oficina" : "libre"}</b>
+                    <span>puesto</span>
+                    <select
+                      className="seat-select"
+                      disabled={selectedPinned}
+                      title={selectedPinned ? "El equipo está fijo en su oficina" : undefined}
+                      value={assignedSeat !== undefined ? String(assignedSeat) : ""}
+                      onChange={(event) => {
+                        if (!selectedKey || selectedPinned) return;
+                        const value = event.target.value;
+                        assignSeat(selectedKey, value === "" ? null : Number(value));
+                      }}
+                    >
+                      <option value="">
+                        AUTO
+                        {currentSeat !== undefined
+                          ? ` · ${SEAT_OPTIONS[currentSeat]?.label ?? `Puesto ${currentSeat + 1}`}`
+                          : ""}
+                      </option>
+                      {SEAT_OPTIONS.map((option) => {
+                        const owner = seatOwners.get(option.index);
+                        const busy = owner !== undefined && owner !== selectedKey;
+                        return (
+                          <option key={option.index} value={option.index} disabled={busy}>
+                            {option.label}
+                            {busy ? " · ocupado" : ""}
+                          </option>
+                        );
+                      })}
+                    </select>
                   </div>
+
+                  {selectedTeam && (
+                    <>
+                      <button type="button" className="btn ghost wide" onClick={useGoForTeam}>
+                        USAR OPENCODE GO EN EL EQUIPO
+                      </button>
+                      {teamNotice && <div className="hint">{teamNotice}</div>}
+                    </>
+                  )}
+
+                  {canAssignManager && selectedSession.id !== managerId && (
+                    <button
+                      type="button"
+                      className="btn ghost wide"
+                      onClick={() => assignManager(selectedSession.id)}
+                    >
+                      HACER MANAGER
+                    </button>
+                  )}
 
                   {selectedActivity && (
                     <div className="tool">
@@ -857,7 +1683,9 @@ export default function App() {
                   )}
 
                   {selectedPermission && <div className="warnbox">permiso pendiente: {selectedPermission}</div>}
-                  {selectedError && <div className="errbox">error: {selectedError}</div>}
+                  {selectedError && (
+                    <ErrorBox message={selectedError} action={selectedRegionalAction} />
+                  )}
 
                   <button type="button" className="btn primary wide" onClick={() => setTab("chat")}>
                     Abrir chat de esta sesión
@@ -877,10 +1705,15 @@ export default function App() {
               session={selectedSession}
               messages={chatMessages}
               busy={selectedBusy}
+              busyLabel={chatBusyLabel}
+              sessionError={selectedError}
+              onRegionalFallback={() => (selected ? useRegionalModel(selected) : false)}
+              onGoFallback={selectedTeam ? useGoForTeam : undefined}
               agent={chatAgent}
               model={chatModel}
               name={selectedSession ? nameFor(selectedSession) : undefined}
               onEdit={() => selected && setEditingCharacter(selected)}
+              handoff={handoff}
               onSend={sendPrompt}
               onAbort={async () => {
                 if (selected) await abortSession(selected);
@@ -899,6 +1732,18 @@ export default function App() {
           onCreate={createAgentSession}
         />
       )}
+
+      {teamModalOpen && (
+        <TeamModal
+          agents={agents}
+          models={models}
+          areas={teamAreas}
+          onClose={() => setTeamModalOpen(false)}
+          onCreate={createTeam}
+        />
+      )}
+
+      {layoutOpen && <LayoutEditor onClose={() => setLayoutOpen(false)} />}
 
       {editingCharacter && sessions[editingCharacter] && (
         <CharacterModal

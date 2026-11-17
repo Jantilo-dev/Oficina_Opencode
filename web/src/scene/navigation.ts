@@ -1,8 +1,8 @@
 import { CUBICLES, CUBICLES2 } from "./sprites";
 import type { Point } from "./occupancy";
 
-const WIDTH = 1280;
-const HEIGHT = 1640;
+const WIDTH = 1600;
+const HEIGHT = 2020;
 const CELL = 6;
 const COLS = Math.ceil(WIDTH / CELL);
 const ROWS = Math.ceil(HEIGHT / CELL);
@@ -33,93 +33,90 @@ function hSegments(y: number, x1: number, x2: number, gaps: Array<[number, numbe
 }
 
 block(0, 0, WIDTH, 150);
-block(18, 150, 12, 1470);
-block(1250, 150, 12, 1470);
-block(18, 1620, 1244, 14);
-hSegments(950, 18, 1262, [[610, 668]]);
-block(30, 962, 580, 18);
-block(668, 962, 572, 18);
+block(18, 150, 12, 1850);
+block(1570, 150, 12, 1850);
+block(18, 2000, 1552, 14);
+hSegments(1330, 18, 1582, [
+  [550, 590],
+  [1110, 1150],
+  [1230, 1270]
+]);
+block(30, 1342, 520, 18);
+block(590, 1342, 520, 18);
+block(1150, 1342, 80, 18);
+block(1270, 1342, 300, 18);
 
-hSegments(1040, 30, 410, []);
-hSegments(1040, 450, 830, []);
-hSegments(1040, 870, 1250, []);
-hSegments(1270, 30, 410, [[200, 240]]);
-hSegments(1270, 450, 830, [[620, 660]]);
-hSegments(1270, 870, 1250, [[1040, 1080]]);
-hSegments(1340, 30, 410, []);
-hSegments(1340, 450, 830, []);
-hSegments(1340, 870, 1250, []);
-hSegments(1570, 30, 410, [[200, 240]]);
-hSegments(1570, 450, 830, [[620, 660]]);
-hSegments(1570, 870, 1250, [[1040, 1080]]);
+hSegments(1420, 30, 550, []);
+hSegments(1420, 590, 1110, []);
+hSegments(1420, 1150, 1570, []);
+hSegments(1650, 30, 550, [[250, 330]]);
+hSegments(1650, 590, 1110, [[810, 890]]);
+hSegments(1650, 1150, 1570, [[1320, 1400]]);
+hSegments(1720, 30, 550, []);
+hSegments(1720, 590, 1110, []);
+hSegments(1720, 1150, 1570, []);
+hSegments(1950, 30, 550, [[250, 330]]);
+hSegments(1950, 590, 1110, [[810, 890]]);
+hSegments(1950, 1150, 1570, [[1320, 1400]]);
 
-vSegments(30, 1040, 1270, []);
-vSegments(410, 1040, 1270, []);
-vSegments(450, 1040, 1270, []);
-vSegments(830, 1040, 1270, []);
-vSegments(870, 1040, 1270, []);
-vSegments(30, 1340, 1570, []);
-vSegments(410, 1340, 1570, []);
-vSegments(450, 1340, 1570, []);
-vSegments(830, 1340, 1570, []);
-vSegments(870, 1340, 1570, []);
+vSegments(30, 1420, 1650, []);
+vSegments(550, 1420, 1650, []);
+vSegments(590, 1420, 1650, []);
+vSegments(1110, 1420, 1650, []);
+vSegments(1150, 1420, 1650, []);
+vSegments(30, 1720, 1950, []);
+vSegments(550, 1720, 1950, []);
+vSegments(590, 1720, 1950, []);
+vSegments(1110, 1720, 1950, []);
+vSegments(1150, 1720, 1950, []);
 
 const roomGaps: Array<[number, number]> = [
-  [316, 356],
-  [384, 432],
-  [548, 588],
-  [620, 660],
-  [796, 836]
+  [480, 520],
+  [890, 930],
+  [1200, 1240]
 ];
-vSegments(382, 150, 950, roomGaps);
-vSegments(440, 150, 950, roomGaps);
-vSegments(790, 150, 950, roomGaps);
-vSegments(840, 150, 950, [
-  [316, 356],
-  [384, 432],
-  [548, 588],
-  [620, 660],
-  [746, 786],
-  [796, 836]
-]);
+vSegments(550, 150, 1330, roomGaps);
+vSegments(590, 150, 1330, []);
+vSegments(1110, 150, 1330, roomGaps);
+vSegments(1150, 150, 1330, [[900, 940]]);
 
-hSegments(410, 30, 382, [[156, 196]]);
-hSegments(410, 448, 790, [[556, 596]]);
-hSegments(655, 30, 382, [[156, 196]]);
-hSegments(655, 448, 790, [[556, 596]]);
-hSegments(615, 848, 1250, [
-  [960, 992],
-  [1120, 1152]
+hSegments(580, 30, 550, []);
+hSegments(580, 590, 1110, []);
+hSegments(1000, 30, 550, []);
+hSegments(1000, 590, 1110, []);
+hSegments(615, 1150, 1570, [
+  [1240, 1272],
+  [1400, 1432]
 ]);
 
 for (const cubicle of CUBICLES) block(cubicle.x, cubicle.y, cubicle.w, cubicle.h);
 for (const cubicle of CUBICLES2) block(cubicle.x, cubicle.y, cubicle.w, cubicle.h);
 
-block(52, 690, 316, 22);
-block(72, 658, 46, 34);
-block(150, 700, 34, 64);
-block(306, 676, 54, 88);
-block(110, 806, 180, 40);
-block(1100, 825, 120, 50);
+block(52, 1070, 316, 22);
+block(72, 1038, 46, 34);
+block(150, 1080, 34, 64);
+block(306, 1056, 54, 88);
+block(110, 1186, 180, 40);
+block(1420, 825, 120, 50);
 
-block(486, 770, 250, 84);
-block(876, 350, 120, 12);
-block(1068, 350, 120, 12);
-block(1040, 168, 10, 457);
+block(626, 1150, 250, 84);
+block(1178, 350, 120, 12);
+block(1370, 350, 120, 12);
+block(1340, 168, 10, 457);
 for (let row = 0; row < 2; row++) {
   for (let index = 0; index < 3; index++) {
-    block(858 + index * 60, row === 0 ? 200 : 440, 56, 84);
-    block(1050 + index * 60, row === 0 ? 200 : 440, 56, 84);
+    block(1160 + index * 60, row === 0 ? 200 : 440, 56, 84);
+    block(1352 + index * 60, row === 0 ? 200 : 440, 56, 84);
   }
 }
-block(880, 700, 130, 44);
-block(1020, 760, 70, 26);
-block(1060, 840, 80, 34);
+block(1160, 700, 130, 44);
+block(1300, 760, 70, 26);
+block(1340, 840, 80, 34);
 
 const CLEARANCE = 2;
 
 export function isBlockedPoint(x: number, y: number, clearance = CLEARANCE): boolean {
-  if (x < 22 || x > 1248 || y < 152 || y > 1618) return true;
+  if (x < 22 || x > 1568 || y < 152 || y > 1998) return true;
   for (const item of blocks) {
     if (
       x >= item.x - clearance &&
@@ -137,9 +134,16 @@ function cellIndex(cx: number, cy: number): number {
   return cy * COLS + cx;
 }
 
+const blockedCells = new Uint8Array(COLS * ROWS);
+for (let cy = 0; cy < ROWS; cy++) {
+  for (let cx = 0; cx < COLS; cx++) {
+    blockedCells[cellIndex(cx, cy)] = isBlockedPoint(cx * CELL + CELL / 2, cy * CELL + CELL / 2) ? 1 : 0;
+  }
+}
+
 function cellBlocked(cx: number, cy: number): boolean {
   if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) return true;
-  return isBlockedPoint(cx * CELL + CELL / 2, cy * CELL + CELL / 2);
+  return blockedCells[cellIndex(cx, cy)] === 1;
 }
 
 function nearestFree(x: number, y: number): { cx: number; cy: number } {
@@ -239,7 +243,7 @@ export function findPath(from: Point, to: Point): Point[] {
   const goal = nearestFree(to.x, to.y);
   const startIndex = cellIndex(start.cx, start.cy);
   const goalIndex = cellIndex(goal.cx, goal.cy);
-  if (startIndex === goalIndex) return [from, to];
+  if (startIndex === goalIndex) return lineClear(from, to) ? [from, to] : [];
 
   const total = COLS * ROWS;
   const gScore = new Float64Array(total).fill(Number.POSITIVE_INFINITY);
@@ -288,7 +292,7 @@ export function findPath(from: Point, to: Point): Point[] {
     }
   }
 
-  if (!found) return [from, to];
+  if (!found) return [];
 
   const cells: Point[] = [];
   let cursor = goalIndex;
@@ -303,5 +307,3 @@ export function findPath(from: Point, to: Point): Point[] {
   const points = [from, ...cells, to];
   return simplify(points);
 }
-
-
