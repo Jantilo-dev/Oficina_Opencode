@@ -78,7 +78,9 @@ web/
     types.ts, format.ts, characters.ts
     index.css, chat.css      Tema de la UI
     scene/
-      sprites.ts             Escena 2.5D: áreas, muebles, chibis, burbujas
+      sprites.ts             Escena 2.5D: áreas, muebles, chibis, burbujas, temas
+      occupancy.ts           Puestos, spots, pausas y overflow
+      navigation.ts          Rejilla A*, muros/muebles y puertas transitables
       OfficeCanvas.tsx       Asignación, movimiento, hit-test, escala
       AgentPanel.tsx         Panel retro de detalle por agente
     components/              NewSessionModal, SessionChat, CharacterModal
@@ -106,6 +108,11 @@ código anterior no importado por la app actual.
    recibe vía `GET /api/agents/stream` y actualiza el estado por frame.
 5. `App.tsx` fusiona sesiones de opencode (`oc:<id>`) y agentes externos
    (`live:<agentId>`) en `SceneAgent[]` para la escena.
+6. Los eventos SSE se filtran por directorio: `session.created/updated` usan
+   `info.directory` y el resto se descarta si la sesión no pertenece al directorio
+   cargado.
+7. `/api/bootstrap` se reintenta con backoff, al recuperar el SSE y al volver a la
+   pestaña. Los metadatos de sesión se cachean 30 s y se piden con concurrencia 6.
 
 Mapeo de estados de opencode a la escena:
 
@@ -152,20 +159,48 @@ curl.exe -X POST http://127.0.0.1:5174/api/agents/report `
 
 - Pixel art 2.5D, bordes oscuros, `imageSmoothingEnabled = false` y
   `image-rendering: pixelated`.
-- Suelo de ladrillo azul; pared superior con ventanas, calendario y puertas de
-  cristal. Pasillos verticales claros entre columnas.
-- Áreas: **AREA INTRANET**, **AREA LOGÍSTICA**, **AREA SOPORTE**, **AREA PORTAL**
-  (dos escritorios cada una), **SALA DE REUNIONES**, **COCINA**, **BAÑO · 12**
-  (12 cabinas y lavabos) y **PASILLO**.
-- `CUBICLES` (8) define escritorios; `CAFE_SPOTS` y `HALL_SPOTS` definen destinos.
-  Cada sesión toma un cubículo; si sobran, van a café/pasillo.
-- `idle` → café; `talking` → sala de reuniones/pasillo con burbuja compartida.
-- Pantallas y LEDs se encienden solo si el agente está sentado y trabajando; al
-  levantarse quedan en standby.
+- Suelo de ladrillo según tema; pared superior con ventanas, calendario y puertas
+  de cristal. Pasillos verticales claros entre columnas.
+- Áreas superiores: **AREA INTRANET**, **AREA LOGÍSTICA**, **AREA SOPORTE**,
+  **AREA PORTAL** (dos cubículos cada una), **SALA DE REUNIONES**, **COCINA**,
+  **PASILLO** (entrada y recepción) y **BAÑO** dividido en **HOMBRES** y
+  **MUJERES** (3 cabinas por fila y lado, lavabos y muro divisorio).
+- Planta baja: **GERENCIA**, **OFICINA 2**, **OFICINA 3**, **OFICINA 4**,
+  **OFICINA 5** y **OFICINA 6**. Cada oficina mide 380×230, tiene dos cubículos y
+  **una sola puerta** hacia el pasillo.
+- `WORKSTATIONS` (20) combina `CUBICLES` (8 superiores) y `CUBICLES2` (12 en las
+  seis oficinas), todos con el mismo diseño de escritorio. `SEATS` en
+  `occupancy.ts` es la fuente para asignar puestos.
+- `idle` con puesto se queda sentado y sale a pausas programadas (café, agua,
+  baño); los agentes sin puesto esperan en pasillo/corredor o en overflow.
+- Los baños usan spots con `gender`; los agentes entran por la puerta y el lado
+  que corresponde a su género.
+- `talking` → puestos únicos en la sala de reuniones con burbuja compartida.
+- El manager (`managerId`) ocupa `MANAGER_SEAT`, el primer puesto de GERENCIA.
+- `navigation.ts` construye una rejilla de 6 px, bloquea muros (respetando las
+  puertas), muebles y escritorios, y calcula rutas A*; los personajes solo cruzan
+  por huecos de puerta y se mueven por pasillos.
+- La recepción del PASILLO tiene puerta de entrada en la pared derecha y una
+  recepcionista fija (`drawReception` + `RECEPTION_DESK`), que no depende de
+  opencode.
+- El canvas se escala en modo **cover** (llena la pantalla). Rueda del ratón y
+  botones **+/−** hacen zoom, arrastrar hace pan, **AJUSTAR** encuadra todo y
+  **LLENAR** vuelve a cubrir. El espacio libre se dibuja como zona
+  **EN REPARACIÓN** con franjas de obra.
+- Pantallas y LEDs se encienden mientras el puesto está ocupado (agente sentado)
+  y se apagan cuando se levanta o el puesto queda vacío; apagadas quedan oscuras
+  con LED rojo.
 - Manos en teclado y ratón; teclas y ratón animados al `coding`; mano a la barbilla
   al `thinking`.
+- Género: `CharacterParts.gender` o derivado del id; las mujeres usan pelo largo y
+  falda, los hombres pelo corto y pantalón.
 - Burbujas: puntos (thinking), monitor (coding), terminal (running_tool), taza
   (idle), diálogo (talking), `!` (error).
+- Personajes: `CharacterLook.parts` (pelo, ropa, piel, accesorio) y la galería se
+  dibujan en los chibis; las imágenes propias se aceptan como `data:`, `blob:` o
+  ruta local y se cachean.
+- Temas: `SCENE_PALETTES` aplica FUEGO/RUBÍ/ESMERALDA a suelo, paredes, paneles y
+  pasillos; el tema llega desde `App.tsx` a `drawScene`.
 - El arte es procedural. **No** añadir sprites, logos ni personajes con copyright.
 
 ## 7. Convenciones
@@ -191,6 +226,8 @@ npm run dev:api      # solo API (tsx watch)
 npm run dev:web      # solo Vite
 npm run typecheck    # tsc --noEmit
 npm run build        # typecheck + vite build
+npm run build:server # compila la API a dist/server
+npm start            # sirve dist/web desde la API compilada
 npm run probe        # prueba con orquestador + 2 investigadores
 npm run clean-demo   # lista sesiones demo
 npm run clean-demo -- --yes  # borra sesiones demo
@@ -221,20 +258,27 @@ Los agentes externos son efímeros: se pierden al reiniciar el servidor.
 ## 10. Recetas
 
 - **Añadir un área**: crear su bloque en `drawRooms`/`drawScene`, añadir la etiqueta
-  a `AREAS`, y colocar sus cubículos en `CUBICLES`.
-- **Añadir un escritorio**: agregar entrada a `CUBICLES` (x, y, w, h, seatX,
-  seatY) dentro del área y ampliar `screenStates` si hace falta.
-- **Cambiar destinos**: editar `CAFE_SPOTS` (cocina) o `HALL_SPOTS` (reuniones/
-  pasillo).
+  a `AREAS`, y colocar sus puestos en `WORKSTATIONS`.
+- **Añadir un escritorio**: agregar un `Cubicle` a `CUBICLES` o `CUBICLES2` y
+  reconstruir `WORKSTATIONS`; `SEATS` y `screenStates` se derivan de ahí. Si se
+  añade una zona nueva, actualizar también `navigation.ts` (muros, puertas y
+  muebles).
+- **Cambiar destinos**: editar `CAFE_SPOTS`, `BREAK_SPOTS`, `MEETING_SPOTS` o
+  `STANDING_SPOTS` en `occupancy.ts`.
 - **Nuevo estado**: ampliar `SceneStatus` y `drawBubble`, y mapearlo en `App.tsx`.
 - **Nuevo endpoint**: añadir en `server/index.ts`; si toca opencode, encapsular en
   `server/opencode.ts`.
-- **Café/agua**: los `idle` caminan a `CAFE_SPOTS`; las pantallas de su cubículo
-  se apagan automáticamente.
+- **Pausas**: `idle` con mesa sale según hash; ajustar `firstBreakDelay`,
+  `nextBreakDelay`, `breakDuration` o `maxBreakers` en `occupancy.ts`.
+- **Tema**: ampliar `SCENE_PALETTES` y el tipo `ThemeName` en `office/sprites.ts`.
+- **Personaje**: ampliar `CharacterParts`/`LOOK_PRESETS` y su dibujo en
+  `drawChibiSeated`/`drawChibiStanding`.
 
 ## 11. Límites conocidos
 
 - Los agentes externos viven en memoria; no se persisten.
+- La planta tiene 20 puestos. A partir de ahí los agentes esperan de pie en el
+  pasillo o en la rejilla de overflow.
 - Las sesiones mostradas pertenecen al directorio donde corre `opencode serve`.
 - No hay terminal embebido (PTY) en la UI actual.
 - El proxy SSE reintenta si opencode se cae; el aviso aparece en la cabecera.

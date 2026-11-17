@@ -48,21 +48,35 @@ npm run dev
 If your opencode server uses Basic auth, set `OPENCODE_SERVER_PASSWORD` (and
 optionally `OPENCODE_SERVER_USERNAME`, default `opencode`); the proxy forwards it.
 
+For a production build served by the API itself:
+
+```powershell
+npm run build
+npm run build:server
+npm start
+```
+
+`npm start` serves `dist/web` from the API on `127.0.0.1:5174`.
+
 ## What you see
 
-- A floor plan inspired by a classic cubicle office: blue carpet, white walls,
-  entrance and **reception** on the left, **GERENCIA** (the manager's office),
-  **conference room**, **kitchen**, central **bullpen** with cubicle pods, corridors,
-  **annex**, **bathrooms** and a **copy room**.
-- Desks are **wide, double-sided vertical columns**: two people sit across from each
-  other with back-to-back portrait monitors, notebooks, keyboards and mice. There is an
-  **OFICINA 2** on the lower floor with three more double desks (35 seats total).
-  The manager (`orquestador`/`plan`/`build`) takes the private office.
-- Idle agents walk along the corridors to coffee, water or the bathroom and back.
+- A floor plan inspired by a classic cubicle office: carpet, white walls, an
+  entrance and **reception** in the hall, four upper work areas, a conference room,
+  kitchen, corridors, split **bathrooms** and **six lower offices**.
+- The upper floor has eight cubicles. The lower floor has **GERENCIA, OFICINA 2,
+  OFICINA 3, OFICINA 4, OFICINA 5 and OFICINA 6**, each with two cubicles and a
+  single door, for **20 seats total**. The manager (`orquestador`/`plan`/`build`)
+  takes one GERENCIA desk, and a fixed receptionist works at the hall entrance.
+- Agents walk along the corridors and through the doors (pathfinding with the floor
+  walls and furniture as obstacles); they no longer cross walls.
+- Idle agents stay seated at their desks and occasionally get up for coffee, water or
+  the bathroom. Bathrooms are split into **HOMBRES** and **MUJERES**, and agents use
+  the side that matches their gender. Add `?breaks=fast` (or `?breaks=demo`) to
+  preview that sooner; `?nobreaks` disables breaks.
 - New sessions walk in from the entrance to their desk.
-- Characters sit at their desks; when idle they occasionally get up for coffee or
-  water and come back. Add `?breaks=fast` (or `?breaks=demo`) to preview that sooner.
-- The whole floor scales to fit the window.
+- The floor fills the screen (cover). Use the mouse wheel or the **+/−** buttons to
+  zoom, drag to pan, **AJUSTAR** to see the whole floor and **LLENAR** to fill the
+  screen again. The empty area is drawn as an "EN REPARACIÓN" construction zone.
 - Activity from `message.part.updated`: `edit`/`write` types, `read`/`grep` reads, `bash` runs a terminal.
 - Bubbles for permission requests (`!`), errors (`x`) and retries.
 - Right panel with two tabs: **EQUIPO** (sessions, agent, status, details) and
@@ -85,7 +99,9 @@ optionally `OPENCODE_SERVER_USERNAME`, default `opencode`); the proxy forwards i
 | `GET /api/health` | app + upstream status |
 | `GET /api/bootstrap` | directory, sessions, statuses, agent/model metadata |
 | `GET /api/events` | SSE proxy of opencode `/global/event` |
-| `GET /api/agents` | agent list with mode and permissions |
+| `GET /api/opencode/agents` | opencode agents with mode and permissions |
+| `GET /api/agents` | snapshot of external live agents |
+| `GET /api/agents/stream` | SSE of external live agents |
 | `GET /api/models` | provider/model list |
 | `POST /api/sessions` | create a session |
 | `POST /api/sessions/:id/prompt` | send an instruction (`agent`, `model?`, `text`) |
@@ -96,8 +112,9 @@ optionally `OPENCODE_SERVER_USERNAME`, default `opencode`); the proxy forwards i
 ## Themes
 
 The header button cycles three palettes: **FUEGO**, **RUBÍ** and **ESMERALDA**.
-The choice is saved in `localStorage`; `?theme=rubi` or `?theme=esmeralda` in the
-URL picks one directly.
+The palette is applied to both the UI and the office (carpet, walls, panels and
+corridors). The choice is saved in `localStorage`; `?theme=rubi` or
+`?theme=esmeralda` in the URL picks one directly.
 
 ## Characters: names and avatars
 
@@ -106,10 +123,11 @@ In the **SESIÓN** tab press the pencil (✎) next to the title:
 - **Nombre del personaje**: shown on the nameplate, the zone sign and the list.
 - **Diseño personalizado**: hair style (short/long/twin/spiky), accessory
   (glasses/headband/cape/star), hair/shirt colours and skin tone, with a live preview.
-  It is drawn as original generic pixel art.
+  The same parts are drawn on the character in the office.
 - **Galería**: nine original archetypes (Original, Ninja, Idol, Científico, Héroe,
-  Samurái, Maga, Piloto, Gótico).
-- **Imagen propia**: PNG/JPG/WEBP/GIF/SVG up to 256 KB.
+  Samurái, Maga, Piloto, Gótico). They are rendered as presets in the scene.
+- **Imagen propia**: PNG/JPG/WEBP/GIF/SVG up to 256 KB. Image avatars can be data,
+  blob or local paths; remote URLs are ignored by the scene.
 - Everything is stored in `localStorage` per session and removed when you delete it.
 
 The project ships **no copyrighted characters** (no JJK, Pokémon, Miku, etc.). The
@@ -156,7 +174,7 @@ Any local process or OpenCode hook can report its state to the dashboard.
   "agentId": "ana",
   "name": "Ana",
   "status": "coding",
-  "currentTask": "Refactor de autenticaci�n",
+  "currentTask": "Refactor de autenticaci�n",
   "file": "src/auth.ts",
   "log": "editando auth.ts"
 }
@@ -185,18 +203,25 @@ curl.exe -X DELETE http://127.0.0.1:5174/api/agents/ana
   screen edge), not the camera.
 - Status bubbles: `...` thinking, lit monitor coding, terminal running_tool,
   cup idle, speech talking, `!` error.
-- Idle agents walk to the caf�; `talking` agents meet in the lower hallway.
+- Idle agents stay at their desks and take breaks at the café; `talking` agents
+  meet in the meeting room.
 ## Areas
 
-The floor is split into named rooms, two desks each:
+The floor is split into named rooms:
 
-- AREA INTRANET, AREA LOG�STICA, AREA SOPORTE, AREA PORTAL
+- AREA INTRANET, AREA LOGÍSTICA, AREA SOPORTE, AREA PORTAL (two cubicles each)
 - SALA DE REUNIONES (talking agents meet here)
-- COCINA (coffee, water, vending and table; idle agents come here)
-- BA�O � 12 (twelve stalls plus sinks)
-- PASILLO connecting the rooms
+- COCINA (coffee, water, vending and table; agents come here on breaks)
+- BAÑO split into HOMBRES and MUJERES (stalls, sinks and a dividing wall)
+- PASILLO connecting the rooms, with reception and entrance door
+- GERENCIA, OFICINA 2, OFICINA 3, OFICINA 4, OFICINA 5 and OFICINA 6 (two
+  cubicles and one door each) on the lower floor
 
-Desks keep their own monitor, notebook, keyboard, mouse and screen state.
+Desks keep their own monitor, keyboard, mouse and screen state. Seated agents rest
+their hands on the keyboard and mouse; while coding they type and move the mouse.
+A monitor turns on while its seat is occupied and turns off when the agent leaves;
+off screens are dark with a red LED. Characters have a gender and use long hair
+and/or a skirt when female.
 ## License
 
 GPL-3.0-only. Copyright (C) 2026 Julio Antilo. See [LICENSE](LICENSE).

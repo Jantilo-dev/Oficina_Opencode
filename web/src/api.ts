@@ -106,7 +106,9 @@ export function subscribe(
   source.onmessage = (message) => {
     try {
       const parsed = JSON.parse(message.data);
-      onEvent((parsed.payload ?? parsed) as AgentEvent);
+      const payload = (parsed.payload ?? parsed) as AgentEvent;
+      const directory = typeof parsed.directory === "string" ? parsed.directory : payload.directory;
+      onEvent(directory ? { ...payload, directory } : payload);
     } catch {
       /* ignore malformed frame */
     }

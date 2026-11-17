@@ -97,8 +97,14 @@ export default function App() {
   const [externalSelected, setExternalSelected] = useState<SceneAgent | null>(null);
   const { agents: liveAgents, connected: liveConnected } = useAgentSync();
   const [opencodeUrl, setOpencodeUrl] = useState("http://127.0.0.1:4096");
+  const [bootTick, setBootTick] = useState(0);
+  const [bootFailed, setBootFailed] = useState(false);
+  const bootFailedRef = useRef(false);
   const dirRef = useRef<string | null>(null);
+  const sessionDirsRef = useRef<Map<string, string>>(new Map());
   const loadingRef = useRef<Set<string>>(new Set());
+
+  bootFailedRef.current = bootFailed;
 
   const cycleTheme = () => {
     setTheme((current) => {
@@ -109,23 +115,50 @@ export default function App() {
     });
   };
 
+  const retryBootstrap = () => {
+    setBootFailed(false);
+    setBootTick((current) => current + 1);
+  };
+
   useEffect(() => {
     let alive = true;
-    fetchBootstrap()
-      .then((data) => {
+    let timer: number | null = null;
+    let attempts = 0;
+
+    const load = async () => {
+      try {
+        const data = await fetchBootstrap();
         if (!alive) return;
         dirRef.current = data.directory;
+        sessionDirsRef.current = new Map(data.sessions.map((session) => [session.id, session.directory]));
         setBoot(data);
         setSessions(Object.fromEntries(data.sessions.map((s) => [s.id, s])));
         setStatuses(data.statuses);
-        setMeta(data.meta ?? {});
+        setMeta((prev) => ({ ...prev, ...data.meta }));
         setSelected((current) => current ?? data.sessions.find((s) => !s.parentID)?.id ?? data.sessions[0]?.id ?? null);
         setLink("live");
-      })
-      .catch(() => {
-        if (alive) setLink("offline");
-      });
+        setBootFailed(false);
+      } catch {
+        if (!alive) return;
+        setBootFailed(true);
+        setLink((current) => (current === "live" ? current : "offline"));
+        if (attempts < 3) {
+          attempts += 1;
+          timer = window.setTimeout(load, attempts * 1000);
+        }
+      }
+    };
 
+    void load();
+
+    return () => {
+      alive = false;
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [bootTick]);
+
+  useEffect(() => {
+    let alive = true;
     const unsubscribe = subscribe(
       (event) => handleEvent(event),
       (state) => {
@@ -140,6 +173,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const refresh = () => {
+      if (!document.hidden) setBootTick((current) => current + 1);
+    };
+    document.addEventListener("visibilitychange", refresh);
+    return () => document.removeEventListener("visibilitychange", refresh);
+  }, []);
+
+  useEffect(() => {
     saveCharacters(characters);
   }, [characters]);
 
@@ -151,6 +192,10 @@ export default function App() {
         if (!alive) return;
         setOpcDown(!health.upstream);
         setOpencodeUrl(health.opencode);
+        if (health.upstream && bootFailedRef.current) {
+          bootFailedRef.current = false;
+          setBootTick((current) => current + 1);
+        }
       } catch {
         if (alive) setOpcDown(true);
       }
@@ -214,38 +259,50 @@ export default function App() {
   }, [selected, transcripts]);
 
   const forgetSession = (id: string) => {
-    setSessions((prev) => {
+    sessionDirsRef.current.delete(id);
+    const remove = <T,>(prev: Record<string, T>): Record<string, T> => {
+      if (!(id in prev)) return prev;
       const next = { ...prev };
       delete next[id];
       return next;
-    });
-    setTranscripts((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setIntended((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setCharacters((prev) => {
-      if (!prev[id]) return prev;
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
+    };
+    setSessions(remove);
+    setStatuses(remove);
+    setMeta(remove);
+    setActivity(remove);
+    setPermissions(remove);
+    setErrors(remove);
+    setDiffs(remove);
+    setSpawned(remove);
+    setTranscripts(remove);
+    setIntended(remove);
+    setCharacters(remove);
     setSelected((current) => (current === id ? null : current));
+    setExternalSelected((current) => (current?.id === `oc:${id}` ? null : current));
+  };
+
+  const sessionAllowed = (id: string): boolean => {
+    const directory = sessionDirsRef.current.get(id);
+    if (directory !== undefined) {
+      return !dirRef.current || normalizeDir(directory) === normalizeDir(dirRef.current);
+    }
+    return !dirRef.current;
   };
 
   const handleEvent = (event: AgentEvent) => {
     const type = event.type;
     const props = event.properties ?? {};
 
+    if (type === "server.connected") {
+      setBootTick((current) => current + 1);
+      return;
+    }
+
     if (type === "session.created" || type === "session.updated") {
       const info = props.info as Session;
       if (!info?.id) return;
       if (dirRef.current && normalizeDir(info.directory) !== normalizeDir(dirRef.current)) return;
+      sessionDirsRef.current.set(info.id, info.directory);
       if (type === "session.created") {
         setSpawned((prev) => (prev[info.id] ? prev : { ...prev, [info.id]: Date.now() }));
       }
@@ -263,26 +320,51 @@ export default function App() {
 
     if (type === "session.status") {
       const sessionID = String(props.sessionID);
-      setStatuses((prev) => ({ ...prev, [sessionID]: props.status as SessionStatus }));
+      if (!sessionAllowed(sessionID)) return;
+      const status = props.status as SessionStatus;
+      setStatuses((prev) => ({ ...prev, [sessionID]: status }));
+      if (status.type === "busy") {
+        setErrors((prev) => {
+          if (!prev[sessionID]) return prev;
+          const next = { ...prev };
+          delete next[sessionID];
+          return next;
+        });
+      }
       return;
     }
 
     if (type === "session.idle") {
       const sessionID = String(props.sessionID);
+      if (!sessionAllowed(sessionID)) return;
       setStatuses((prev) => ({ ...prev, [sessionID]: { type: "idle" } }));
+      setActivity((prev) => {
+        if (!prev[sessionID]) return prev;
+        const next = { ...prev };
+        delete next[sessionID];
+        return next;
+      });
+      setPermissions((prev) => {
+        if (!prev[sessionID]) return prev;
+        const next = { ...prev };
+        delete next[sessionID];
+        return next;
+      });
       return;
     }
 
     if (type === "session.error") {
       const sessionID = String(props.sessionID ?? "");
+      if (!sessionID || !sessionAllowed(sessionID)) return;
       const error = props.error?.name ?? "error";
-      if (sessionID) setErrors((prev) => ({ ...prev, [sessionID]: error }));
+      setErrors((prev) => ({ ...prev, [sessionID]: error }));
       return;
     }
 
     if (type === "message.updated") {
       const info = props.info;
       if (!info?.sessionID) return;
+      if (!sessionAllowed(info.sessionID)) return;
       setErrors((prev) => {
         if (!prev[info.sessionID]) return prev;
         const next = { ...prev };
@@ -351,6 +433,7 @@ export default function App() {
     if (type === "message.part.updated") {
       const part = props.part;
       if (!part?.sessionID) return;
+      if (!sessionAllowed(part.sessionID)) return;
       if (part.type === "tool") {
         const state = part.state ?? {};
         const title =
@@ -414,7 +497,9 @@ export default function App() {
 
     if (type === "permission.updated") {
       const sessionID = String(props.sessionID ?? "");
-      if (sessionID) setPermissions((prev) => ({ ...prev, [sessionID]: props.title ?? "permiso" }));
+      if (sessionID && sessionAllowed(sessionID)) {
+        setPermissions((prev) => ({ ...prev, [sessionID]: props.title ?? "permiso" }));
+      }
       return;
     }
 
@@ -440,7 +525,7 @@ export default function App() {
         }),
         { additions: 0, deletions: 0, files: 0 }
       );
-      if (sessionID) setDiffs((prev) => ({ ...prev, [sessionID]: stat }));
+      if (sessionID && sessionAllowed(sessionID)) setDiffs((prev) => ({ ...prev, [sessionID]: stat }));
     }
   };
 
@@ -522,12 +607,21 @@ export default function App() {
         status,
         task: act?.title ?? act?.tool ?? meta[session.id]?.agent,
         file: status === "coding" ? act?.title : undefined,
-        logs
+        logs,
+        look: characters[session.id],
+        spawnedAt: spawned[session.id],
+        isManager: session.id === managerId
       });
     }
 
     return list;
-  }, [liveAgents, allSessions, statuses, activity, errors, permissions, transcripts, characters, meta]);
+  }, [liveAgents, allSessions, statuses, activity, errors, permissions, transcripts, characters, meta, spawned, managerId]);
+
+  useEffect(() => {
+    setExternalSelected((current) =>
+      current && !sceneAgents.some((agent) => agent.id === current.id) ? null : current
+    );
+  }, [sceneAgents]);
 
   const createAgentSession = async (input: {
     agent: string;
@@ -540,6 +634,7 @@ export default function App() {
     const session = await createSession(title);
     await promptSession(session.id, { text: input.text, agent: input.agent, model: input.model });
     setSessions((prev) => ({ ...prev, [session.id]: session }));
+    setSpawned((prev) => ({ ...prev, [session.id]: Date.now() }));
     setStatuses((prev) => ({ ...prev, [session.id]: { type: "busy" } }));
     setMeta((prev) => ({
       ...prev,
@@ -607,6 +702,18 @@ export default function App() {
         <div className="banner">
           opencode no responde en <code>{opencodeUrl}</code>. Arráncalo con{" "}
           <code>opencode --port 4096</code>.
+          <button type="button" className="btn ghost small" onClick={retryBootstrap}>
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {bootFailed && !opcDown && (
+        <div className="banner">
+          No se pudo cargar la oficina desde la API.
+          <button type="button" className="btn ghost small" onClick={retryBootstrap}>
+            Reintentar
+          </button>
         </div>
       )}
 
@@ -614,6 +721,7 @@ export default function App() {
         <div className="office">
           <SceneCanvas
             agents={sceneAgents}
+            theme={theme}
             selectedId={externalSelected?.id ?? (selected ? `oc:${selected}` : null)}
             onSelect={(id) => {
               if (id.startsWith("oc:")) {
@@ -627,10 +735,27 @@ export default function App() {
           />
           {sceneAgents.length === 0 && (
             <div className="empty">
-              <h2>La oficina está vacía</h2>
-              <div>
-                Pulsa <code>+ NUEVA SESIÓN</code> o reporta agentes con <code>/api/agents/report</code>
-              </div>
+              {bootFailed || link === "offline" ? (
+                <>
+                  <h2>No se pudo cargar la oficina</h2>
+                  <div>Comprueba que opencode responde y vuelve a intentarlo.</div>
+                  <button type="button" className="btn primary" onClick={retryBootstrap}>
+                    Reintentar
+                  </button>
+                </>
+              ) : !boot ? (
+                <>
+                  <h2>Conectando…</h2>
+                  <div>Cargando sesiones de opencode.</div>
+                </>
+              ) : (
+                <>
+                  <h2>La oficina está vacía</h2>
+                  <div>
+                    Pulsa <code>+ NUEVA SESIÓN</code> o reporta agentes con <code>/api/agents/report</code>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

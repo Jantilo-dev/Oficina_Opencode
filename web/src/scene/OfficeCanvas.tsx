@@ -1,11 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import {
-  CAFE_SPOTS,
-  CUBICLES,
-  HALL_SPOTS,
+  BREAK_SPOTS,
+  MEETING_SPOTS,
+  SEATS,
+  STANDING_SPOTS,
+  advance,
+  breakDuration,
+  breakMode,
+  firstBreakDelay,
+  hashOf,
+  maxBreakers,
+  nextBreakDelay,
+  overflowSpot,
+  seatExit,
+  setDestination,
+  type Motion,
+  type Placement,
+  type Point
+} from "./occupancy";
+import { findPath } from "./navigation";
+import type { ThemeName } from "../office/sprites";
+import {
+  ENTRANCE,
+  MANAGER_SEAT,
+  WORKSTATIONS,
   agentColors,
   drawScene,
+  sceneBackground,
   type AgentView,
   type SceneAgent
 } from "./sprites";
@@ -14,31 +36,34 @@ type Props = {
   agents: SceneAgent[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  theme: ThemeName;
 };
 
-type Motion = { x: number; y: number; via: { x: number; y: number } | null; kind: "seat" | "cafe" | "hall" };
+type AgentState = {
+  placement: Placement;
+  motion: Motion;
+};
 
-function hashOf(id: string): number {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  return hash;
-}
-
-export default function OfficeCanvas({ agents, selectedId, onSelect }: Props) {
+export default function OfficeCanvas({ agents, selectedId, onSelect, theme }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const agentsRef = useRef<SceneAgent[]>(agents);
   const viewsRef = useRef<AgentView[]>([]);
   const selectedRef = useRef<string | null>(selectedId);
-  const assignmentRef = useRef(new Map<string, number>());
-  const motionRef = useRef(new Map<string, Motion>());
+  const hoverRef = useRef<string | null>(null);
+  const stateRef = useRef(new Map<string, AgentState>());
   const viewRef = useRef({ sx: 1, sy: 1, offsetX: 0, offsetY: 0 });
+  const baseViewRef = useRef({ scale: 1, offsetX: 0, offsetY: 0 });
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+  const dragRef = useRef<{ x: number; y: number; panX: number; panY: number; moved: boolean } | null>(null);
   const [size, setSize] = useState({ width: 1280, height: 900 });
+  const mode = useMemo(() => breakMode(), []);
 
   selectedRef.current = selectedId;
   agentsRef.current = agents;
 
-  const layout = useMemo(() => ({ width: 1280, height: 980 }), []);
+  const layout = useMemo(() => ({ width: 1280, height: 1640 }), []);
 
   useEffect(() => {
     const element = wrapRef.current;
@@ -54,42 +79,121 @@ export default function OfficeCanvas({ agents, selectedId, onSelect }: Props) {
   }, []);
 
   useEffect(() => {
-    const used = new Set(assignmentRef.current.values());
-    for (const agent of agents) {
-      if (assignmentRef.current.has(agent.id)) continue;
-      let slot = -1;
-      for (let i = 0; i < CUBICLES.length; i++) {
-        if (!used.has(i)) {
-          slot = i;
+    const states = stateRef.current;
+    const ids = new Set(agents.map((agent) => agent.id));
+    const usedSeats = new Set<number>();
+    const usedSpots = new Set<number>();
+
+    for (const [id, state] of states) {
+      if (!ids.has(id)) {
+        states.delete(id);
+        continue;
+      }
+      if (state.placement.seat !== null) usedSeats.add(state.placement.seat);
+      if (state.placement.spot !== null) usedSpots.add(state.placement.spot);
+    }
+
+    const ordered = [...agents].sort((a, b) => Number(Boolean(b.isManager)) - Number(Boolean(a.isManager)));
+    for (const agent of ordered) {
+      if (states.has(agent.id)) continue;
+      let seat: number | null = null;
+      const preferred = agent.isManager ? MANAGER_SEAT : -1;
+      if (preferred >= 0 && !usedSeats.has(preferred)) {
+        seat = preferred;
+        usedSeats.add(preferred);
+      }
+      for (let index = 0; seat === null && index < SEATS.length; index++) {
+        if (!usedSeats.has(index)) {
+          seat = index;
+          usedSeats.add(index);
           break;
         }
       }
-      if (slot >= 0) {
-        assignmentRef.current.set(agent.id, slot);
-        used.add(slot);
-        const cubicle = CUBICLES[slot];
-        const working = agent.status !== "idle" && agent.status !== "talking";
-        if (working) {
-          const existing = motionRef.current.get(agent.id);
-          if (!existing) {
-            motionRef.current.set(agent.id, { x: cubicle.seatX, y: cubicle.seatY, via: null, kind: "seat" });
-          } else if (existing.kind !== "seat") {
-            existing.x = cubicle.seatX;
-            existing.y = cubicle.seatY;
-            existing.via = null;
-            existing.kind = "seat";
+      let spot: number | null = null;
+      if (seat === null) {
+        for (let index = 0; index < STANDING_SPOTS.length; index++) {
+          if (!usedSpots.has(index)) {
+            spot = index;
+            usedSpots.add(index);
+            break;
           }
         }
       }
+
+      const hash = hashOf(agent.id);
+      const spawnAge = agent.spawnedAt ? Date.now() - agent.spawnedAt : Number.POSITIVE_INFINITY;
+      const entering = spawnAge < 2500;
+      const x = entering
+        ? ENTRANCE.x
+        : seat !== null
+          ? SEATS[seat].seatX
+          : spot !== null
+            ? STANDING_SPOTS[spot].x
+            : overflowSpot(hash % 200).x;
+      const y = entering
+        ? ENTRANCE.y
+        : seat !== null
+          ? SEATS[seat].seatY
+          : spot !== null
+            ? STANDING_SPOTS[spot].y
+            : overflowSpot(hash % 200).y;
+
+      states.set(agent.id, {
+        placement: {
+          seat,
+          spot,
+          meeting: null,
+          breakSpot: null,
+          mode: entering ? "stand" : seat !== null ? "desk" : "stand",
+          destination: null,
+          nextBreakAt: performance.now() + firstBreakDelay(hash, mode),
+          breakEndsAt: 0
+        },
+        motion: { x, y, path: [] }
+      });
     }
-    const ids = new Set(agents.map((agent) => agent.id));
-    for (const id of [...assignmentRef.current.keys()]) {
-      if (!ids.has(id)) assignmentRef.current.delete(id);
+
+    for (const agent of agents) {
+      const state = states.get(agent.id);
+      if (!state || state.placement.seat !== null) continue;
+      for (let index = 0; index < SEATS.length; index++) {
+        if (usedSeats.has(index)) continue;
+        state.placement.seat = index;
+        usedSeats.add(index);
+        if (state.placement.spot !== null) {
+          usedSpots.delete(state.placement.spot);
+          state.placement.spot = null;
+        }
+        break;
+      }
     }
-    for (const id of [...motionRef.current.keys()]) {
-      if (!ids.has(id)) motionRef.current.delete(id);
+
+    const manager = agents.find((agent) => agent.isManager);
+    const managerState = manager ? states.get(manager.id) : undefined;
+    const managerSeat = MANAGER_SEAT;
+    if (manager && managerState && managerState.placement.seat !== managerSeat) {
+      const occupant = [...states.entries()].find(
+        ([id, state]) => id !== manager.id && state.placement.seat === managerSeat
+      );
+      if (occupant) {
+        occupant[1].placement.seat = managerState.placement.seat;
+        if (occupant[1].placement.seat === null && occupant[1].placement.spot === null) {
+          for (let index = 0; index < STANDING_SPOTS.length; index++) {
+            if (!usedSpots.has(index)) {
+              occupant[1].placement.spot = index;
+              usedSpots.add(index);
+              break;
+            }
+          }
+        }
+      }
+      managerState.placement.seat = managerSeat;
+      if (managerState.placement.spot !== null) {
+        usedSpots.delete(managerState.placement.spot);
+        managerState.placement.spot = null;
+      }
     }
-  }, [agents]);
+  }, [agents, mode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -102,21 +206,12 @@ export default function OfficeCanvas({ agents, selectedId, onSelect }: Props) {
     canvas.style.width = `${size.width}px`;
     canvas.style.height = `${size.height}px`;
 
-    const scaleX = size.width / layout.width;
-    const scaleY = size.height / layout.height;
-    const difference = Math.abs(scaleX - scaleY) / Math.max(scaleX, scaleY);
-    let sx = scaleX;
-    let sy = scaleY;
-    let offsetX = 0;
-    let offsetY = 0;
-    if (difference > 0.35) {
-      const scale = Math.min(scaleX, scaleY);
-      sx = scale;
-      sy = scale;
-      offsetX = (size.width - layout.width * scale) / 2;
-      offsetY = (size.height - layout.height * scale) / 2;
-    }
-    viewRef.current = { sx, sy, offsetX, offsetY };
+    const scale = Math.max(size.width / layout.width, size.height / layout.height);
+    baseViewRef.current = {
+      scale,
+      offsetX: (size.width - layout.width * scale) / 2,
+      offsetY: (size.height - layout.height * scale) / 2
+    };
 
     let frame = 0;
     let last = performance.now();
@@ -125,73 +220,155 @@ export default function OfficeCanvas({ agents, selectedId, onSelect }: Props) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
 
-      const talkingIds = agentsRef.current.filter((item) => item.status === "talking").map((item) => item.id);
-      const idleIds = agentsRef.current.filter((item) => item.status === "idle").map((item) => item.id);
+      let idleSeated = 0;
+      for (const agent of agentsRef.current) {
+        const state = stateRef.current.get(agent.id);
+        if (state?.placement.seat !== null && state?.placement.seat !== undefined && agent.status === "idle") {
+          idleSeated += 1;
+        }
+      }
+      const breakerLimit = maxBreakers(idleSeated, mode);
+      const usedMeeting = new Set<number>();
+      const usedBreak = new Set<number>();
+      for (const state of stateRef.current.values()) {
+        if (state.placement.meeting !== null) usedMeeting.add(state.placement.meeting);
+        if (state.placement.breakSpot !== null) usedBreak.add(state.placement.breakSpot);
+      }
+
       const views: AgentView[] = [];
       for (const agent of agentsRef.current) {
-        const index = assignmentRef.current.get(agent.id) ?? -1;
-        const cubicle = index >= 0 ? CUBICLES[index] : null;
+        const state = stateRef.current.get(agent.id);
+        if (!state) continue;
+        const { placement, motion } = state;
         const hash = hashOf(agent.id);
-        let kind: Motion["kind"] = "seat";
-        let targetX = cubicle ? cubicle.seatX : HALL_SPOTS[hash % HALL_SPOTS.length].x;
-        let targetY = cubicle ? cubicle.seatY : HALL_SPOTS[hash % HALL_SPOTS.length].y;
+        const gender = agent.gender ?? agent.look?.parts?.gender ?? (hash % 2 === 0 ? "female" : "male");
+        const female = gender === "female";
 
-        if (agent.status === "idle") {
-          kind = "cafe";
-          const idleIndex = Math.max(0, idleIds.indexOf(agent.id));
-          const spot = CAFE_SPOTS[idleIndex % CAFE_SPOTS.length];
-          targetX = spot.x;
-          targetY = spot.y;
-        } else if (agent.status === "talking") {
-          kind = "hall";
-          const talkerIndex = Math.max(0, talkingIds.indexOf(agent.id));
-          const spot = HALL_SPOTS[talkerIndex % HALL_SPOTS.length];
-          targetX = spot.x;
-          targetY = spot.y;
-        } else if (!cubicle) {
-          kind = "hall";
-        }
-
-        let motion = motionRef.current.get(agent.id);
-        if (!motion) {
-          motion = { x: targetX, y: targetY, via: null, kind };
-          motionRef.current.set(agent.id, motion);
-        }
-
-        if (motion.kind !== kind) {
-          motion.kind = kind;
-          if (cubicle) {
-            motion.via = { x: cubicle.x + cubicle.w / 2, y: cubicle.y + cubicle.h + 26 };
-          } else {
-            motion.via = null;
+        const activeBreak = placement.breakSpot !== null && placement.breakEndsAt > now && agent.status === "idle";
+        if (placement.breakSpot !== null && (!activeBreak || mode === "off")) {
+          usedBreak.delete(placement.breakSpot);
+          placement.breakSpot = null;
+          if (placement.breakEndsAt > 0) {
+            placement.breakEndsAt = 0;
+            placement.nextBreakAt = now + nextBreakDelay(hash, mode);
           }
         }
 
-        const speed = 120;
-        if (motion.via) {
-          const dx = motion.via.x - motion.x;
-          const dy = motion.via.y - motion.y;
-          const distance = Math.hypot(dx, dy);
-          if (distance < 4) {
-            motion.via = null;
+        let desired: Placement["mode"] = placement.seat !== null ? "desk" : "stand";
+        if (agent.status === "talking") desired = "meeting";
+        if (
+          desired === "desk" &&
+          agent.status === "idle" &&
+          placement.breakSpot === null &&
+          mode !== "off" &&
+          now >= placement.nextBreakAt
+        ) {
+          if (usedBreak.size < breakerLimit) {
+            let spot = -1;
+            for (let index = 0; index < BREAK_SPOTS.length; index++) {
+              if (usedBreak.has(index)) continue;
+              const gender = BREAK_SPOTS[index].gender;
+              if (gender && gender !== (female ? "female" : "male")) continue;
+              spot = index;
+              break;
+            }
+            if (spot >= 0) {
+              placement.breakSpot = spot;
+              placement.breakEndsAt = now + breakDuration(hash, mode);
+              usedBreak.add(spot);
+              desired = "break";
+            } else {
+              placement.nextBreakAt = now + 5000;
+            }
           } else {
-            const step = Math.min(distance, speed * dt);
-            motion.x += (dx / distance) * step;
-            motion.y += (dy / distance) * step;
+            placement.nextBreakAt = now + 5000;
           }
+        } else if (desired === "desk" && activeBreak) {
+          desired = "break";
+        }
+
+        if (desired !== "meeting" && placement.meeting !== null) {
+          usedMeeting.delete(placement.meeting);
+          placement.meeting = null;
+        }
+        if (desired === "meeting" && placement.meeting === null) {
+          let spot = -1;
+          for (let index = 0; index < MEETING_SPOTS.length; index++) {
+            if (!usedMeeting.has(index)) {
+              spot = index;
+              break;
+            }
+          }
+          if (spot >= 0) {
+            placement.meeting = spot;
+            usedMeeting.add(spot);
+          } else {
+            desired = placement.seat !== null ? "desk" : "stand";
+          }
+        }
+
+        let target: Point;
+        let destination: string;
+        if (desired === "desk" && placement.seat !== null) {
+          const seat = SEATS[placement.seat];
+          target = { x: seat.seatX, y: seat.seatY };
+          destination = `seat-${placement.seat}`;
+        } else if (desired === "break" && placement.breakSpot !== null) {
+          const spot = BREAK_SPOTS[placement.breakSpot];
+          target = { x: spot.x, y: spot.y };
+          destination = `break-${placement.breakSpot}`;
+        } else if (desired === "meeting" && placement.meeting !== null) {
+          const spot = MEETING_SPOTS[placement.meeting];
+          target = { x: spot.x, y: spot.y };
+          destination = `meeting-${placement.meeting}`;
+        } else if (placement.spot !== null) {
+          const spot = STANDING_SPOTS[placement.spot];
+          target = { x: spot.x, y: spot.y };
+          destination = `spot-${placement.spot}`;
+          desired = "stand";
         } else {
-          const dx = targetX - motion.x;
-          const dy = targetY - motion.y;
-          const distance = Math.hypot(dx, dy);
-          if (distance > 2) {
-            const step = Math.min(distance, speed * dt);
-            motion.x += (dx / distance) * step;
-            motion.y += (dy / distance) * step;
-          }
+          target = overflowSpot(hash % 200);
+          destination = `overflow-${hash % 200}`;
+          desired = "stand";
         }
 
-        const distanceToTarget = Math.hypot(targetX - motion.x, targetY - motion.y);
-        const seated = kind === "seat" && distanceToTarget < 8 && !motion.via;
+        if (placement.mode !== desired || placement.destination !== destination) {
+          const previousMode = placement.mode;
+          const previousSeat = placement.seat;
+          const seat =
+            previousMode === "desk" && previousSeat !== null
+              ? SEATS[previousSeat]
+              : null;
+          const atSeat =
+            seat !== null && Math.hypot(motion.x - seat.seatX, motion.y - seat.seatY) < 10;
+          const current = { x: motion.x, y: motion.y };
+          const startAccess = atSeat && seat ? seatExit(seat) : current;
+          const goalAccess =
+            desired === "desk" && placement.seat !== null ? seatExit(SEATS[placement.seat]) : target;
+
+          placement.mode = desired;
+          placement.destination = destination;
+
+          const path = findPath(startAccess, goalAccess);
+          if (atSeat && seat) path.unshift({ x: seat.seatX, y: seat.seatY });
+          if (desired === "desk" && placement.seat !== null) {
+            path.push({ x: SEATS[placement.seat].seatX, y: SEATS[placement.seat].seatY });
+          }
+          setDestination(motion, path);
+        }
+
+        if (
+          desired === "desk" &&
+          agent.status === "idle" &&
+          placement.breakSpot === null &&
+          placement.breakEndsAt === 0
+        ) {
+          if (now >= placement.nextBreakAt) placement.nextBreakAt = now + nextBreakDelay(hash, mode);
+        }
+
+        advance(motion, dt, 120);
+        const walking = motion.path.length > 0;
+        const seated = desired === "desk" && !walking;
         views.push({
           id: agent.id,
           name: agent.name,
@@ -199,50 +376,220 @@ export default function OfficeCanvas({ agents, selectedId, onSelect }: Props) {
           task: agent.task,
           file: agent.file,
           logs: agent.logs,
+          look: agent.look,
           x: motion.x,
           y: motion.y,
-          walking: distanceToTarget > 8,
+          walking,
           seated,
           colors: agentColors(agent.id)
         });
       }
 
-      const screens = new Array(CUBICLES.length).fill(false);
+      const screens = new Array(WORKSTATIONS.length).fill(false);
       for (const view of views) {
-        if (!view.seated || view.status === "idle" || view.status === "talking") continue;
-        const index = assignmentRef.current.get(view.id);
-        if (index !== undefined) screens[index] = true;
+        if (!view.seated) continue;
+        const state = stateRef.current.get(view.id);
+        const seat = state?.placement.seat;
+        if (seat !== null && seat !== undefined) screens[seat] = true;
       }
       viewsRef.current = views;
+
+      const base = baseViewRef.current;
+      const currentScale = base.scale * zoomRef.current;
+      const offsetX = base.offsetX + panRef.current.x;
+      const offsetY = base.offsetY + panRef.current.y;
+      const sx = currentScale;
+      const sy = currentScale;
+      viewRef.current = { sx, sy, offsetX, offsetY };
+
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.fillStyle = "#1b2430";
+      ctx.fillStyle = sceneBackground(theme);
       ctx.fillRect(0, 0, size.width, size.height);
+      ctx.save();
+      for (let x = -size.height; x < size.width; x += 52) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.06)";
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x + 26, 0);
+        ctx.lineTo(x + 26 - size.height, size.height);
+        ctx.lineTo(x - size.height, size.height);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.font = "bold 16px ui-monospace, Consolas, monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
+      ctx.fillText("EN REPARACIÓN", 108, size.height / 2);
+      ctx.restore();
+
       ctx.translate(offsetX, offsetY);
       ctx.scale(sx, sy);
-      drawScene(ctx, layout.width, layout.height, views, now, selectedRef.current, screens);
+      drawScene(ctx, layout.width, layout.height, views, now, selectedRef.current, screens, hoverRef.current, theme);
       frame = requestAnimationFrame(loop);
     };
 
     frame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frame);
-  }, [size, layout]);
+  }, [size, layout, mode, theme]);
 
-  const onClick = (event: MouseEvent<HTMLCanvasElement>) => {
-    const bounds = event.currentTarget.getBoundingClientRect();
+  const pick = (clientX: number, clientY: number): string | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const bounds = canvas.getBoundingClientRect();
     const view = viewRef.current;
-    const x = (event.clientX - bounds.left - view.offsetX) / view.sx;
-    const y = (event.clientY - bounds.top - view.offsetY) / view.sy;
+    const x = (clientX - bounds.left - view.offsetX) / view.sx;
+    const y = (clientY - bounds.top - view.offsetY) / view.sy;
     for (const agent of [...viewsRef.current].reverse()) {
       if (Math.abs(agent.x - x) < 34 && y > agent.y - 80 && y < agent.y + 20) {
-        onSelect(agent.id);
-        return;
+        return agent.id;
       }
     }
+    return null;
   };
+
+  const suppressClickRef = useRef(false);
+
+  const canvasPoint = (clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const bounds = canvas.getBoundingClientRect();
+    return { x: clientX - bounds.left, y: clientY - bounds.top };
+  };
+
+  const applyZoom = (nextZoom: number, pointX: number, pointY: number) => {
+    const base = baseViewRef.current;
+    const oldScale = base.scale * zoomRef.current;
+    const oldOffsetX = base.offsetX + panRef.current.x;
+    const oldOffsetY = base.offsetY + panRef.current.y;
+    const worldX = (pointX - oldOffsetX) / oldScale;
+    const worldY = (pointY - oldOffsetY) / oldScale;
+    const zoom = Math.max(0.25, Math.min(4, nextZoom));
+    const newScale = base.scale * zoom;
+    panRef.current = {
+      x: pointX - worldX * newScale - base.offsetX,
+      y: pointY - worldY * newScale - base.offsetY
+    };
+    zoomRef.current = zoom;
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const point = canvasPoint(event.clientX, event.clientY);
+      const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+      applyZoom(zoomRef.current * factor, point.x, point.y);
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  });
+
+  const zoomToFit = () => {
+    const base = baseViewRef.current;
+    const fit = Math.min(size.width / layout.width, size.height / layout.height);
+    const zoom = Math.max(0.25, fit / base.scale);
+    const scale = base.scale * zoom;
+    zoomRef.current = zoom;
+    panRef.current = {
+      x: (size.width - layout.width * scale) / 2 - base.offsetX,
+      y: (size.height - layout.height * scale) / 2 - base.offsetY
+    };
+  };
+
+  const zoomToFill = () => {
+    zoomRef.current = 1;
+    panRef.current = { x: 0, y: 0 };
+  };
+
+  const onClick = (event: MouseEvent<HTMLCanvasElement>) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    const id = pick(event.clientX, event.clientY);
+    if (id) onSelect(id);
+  };
+
+  const onMouseDown = (event: MouseEvent<HTMLCanvasElement>) => {
+    if (event.button !== 0) return;
+    dragRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      panX: panRef.current.x,
+      panY: panRef.current.y,
+      moved: false
+    };
+    event.currentTarget.style.cursor = "grabbing";
+  };
+
+  const onMouseMove = (event: MouseEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    if (drag) {
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) {
+        drag.moved = true;
+        suppressClickRef.current = true;
+      }
+      panRef.current = { x: drag.panX + dx, y: drag.panY + dy };
+      event.currentTarget.style.cursor = "grabbing";
+      return;
+    }
+    const id = pick(event.clientX, event.clientY);
+    hoverRef.current = id;
+    event.currentTarget.style.cursor = id ? "pointer" : "grab";
+  };
+
+  const endDrag = (event: MouseEvent<HTMLCanvasElement>) => {
+    if (dragRef.current?.moved) suppressClickRef.current = true;
+    dragRef.current = null;
+    event.currentTarget.style.cursor = hoverRef.current ? "pointer" : "grab";
+  };
+
+  const onMouseLeave = (event: MouseEvent<HTMLCanvasElement>) => {
+    if (dragRef.current?.moved) suppressClickRef.current = true;
+    dragRef.current = null;
+    hoverRef.current = null;
+    event.currentTarget.style.cursor = "grab";
+  };
+
+  const zoomButton = (label: string, onClick: () => void) => (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        background: "#f4e8cc",
+        color: "#33200f",
+        border: "2px solid #4b3418",
+        padding: "4px 8px",
+        fontFamily: "inherit",
+        fontSize: 11,
+        cursor: "pointer"
+      }}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div ref={wrapRef} style={{ position: "relative", width: "100%", height: "100%" }}>
-      <canvas ref={canvasRef} onClick={onClick} />
+      <canvas
+        ref={canvasRef}
+        onClick={onClick}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={endDrag}
+        onMouseLeave={onMouseLeave}
+        style={{ cursor: "grab" }}
+      />
+      <div style={{ position: "absolute", top: 10, right: 10, display: "flex", gap: 6, zIndex: 5 }}>
+        {zoomButton("−", () => applyZoom(zoomRef.current / 1.2, size.width / 2, size.height / 2))}
+        {zoomButton("+", () => applyZoom(zoomRef.current * 1.2, size.width / 2, size.height / 2))}
+        {zoomButton("AJUSTAR", zoomToFit)}
+        {zoomButton("LLENAR", zoomToFill)}
+      </div>
     </div>
   );
 }

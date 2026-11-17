@@ -236,11 +236,36 @@ export async function deleteSession(id: string): Promise<void> {
   });
 }
 
-async function fetchMeta(sessionID: string, query: string): Promise<SessionMeta | null> {
+const META_TTL = 30000;
+const MAX_META_ENTRIES = 500;
+const metaCache = new Map<string, { updated: number; at: number; value: SessionMeta | null }>();
+
+async function mapLimit<T, R>(items: T[], limit: number, run: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await run(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+async function fetchMeta(sessionID: string, query: string, updated: number): Promise<SessionMeta | null> {
+  const cached = metaCache.get(sessionID);
+  if (cached && cached.updated === updated && Date.now() - cached.at < META_TTL) {
+    return cached.value;
+  }
+
   const messages = await request<Array<{ info: any }>>(`/session/${encodeURIComponent(sessionID)}/message${query}`).catch(
     () => []
   );
   const meta: SessionMeta = {};
+  let tokens = 0;
+  let hasAssistant = false;
   for (const message of messages) {
     const info = message?.info;
     if (!info) continue;
@@ -249,13 +274,18 @@ async function fetchMeta(sessionID: string, query: string): Promise<SessionMeta 
       meta.model = info.model?.modelID;
       meta.provider = info.model?.providerID;
     } else if (info.role === "assistant") {
+      hasAssistant = true;
       meta.model = info.modelID;
       meta.provider = info.providerID;
-      meta.tokens =
-        (info.tokens?.input ?? 0) + (info.tokens?.output ?? 0) + (info.tokens?.reasoning ?? 0);
+      tokens += (info.tokens?.input ?? 0) + (info.tokens?.output ?? 0) + (info.tokens?.reasoning ?? 0);
     }
   }
-  return Object.keys(meta).length > 0 ? meta : null;
+  if (hasAssistant) meta.tokens = tokens;
+  const value = Object.keys(meta).length > 0 ? meta : null;
+
+  if (metaCache.size >= MAX_META_ENTRIES) metaCache.clear();
+  metaCache.set(sessionID, { updated, at: Date.now(), value });
+  return value;
 }
 
 export async function fetchBootstrap(): Promise<Bootstrap> {
@@ -271,8 +301,8 @@ export async function fetchBootstrap(): Promise<Bootstrap> {
     request<Record<string, SessionStatus>>(`/session/status${query}`).catch(() => ({}))
   ]);
 
-  const limited = sessions.slice(0, 40);
-  const metas = await Promise.all(limited.map((session) => fetchMeta(session.id, query)));
+  const limited = sessions.slice(0, 60);
+  const metas = await mapLimit(limited, 6, (session) => fetchMeta(session.id, query, session.time.updated));
   const meta: Record<string, SessionMeta> = {};
   limited.forEach((session, index) => {
     const value = metas[index];

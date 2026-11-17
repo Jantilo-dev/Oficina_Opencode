@@ -12,7 +12,9 @@
     "probe": "tsx scripts/probe.ts",
     "clean-demo": "tsx scripts/clean-demo.ts",
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit && vite build"
+    "build": "tsc --noEmit && vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "start": "node dist/server/index.js"
   },
   "dependencies": {
     "express": "^4.21.2"

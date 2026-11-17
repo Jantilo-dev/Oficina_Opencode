@@ -7,6 +7,7 @@ export type CharacterParts = {
   shirt: string;
   skin: string;
   accessory: Accessory;
+  gender?: "male" | "female";
 };
 
 export type CharacterLook = {

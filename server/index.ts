@@ -92,7 +92,12 @@ app.post("/api/agents/report", (req, res) => {
     currentTask: typeof body.currentTask === "string" ? body.currentTask.slice(0, 300) : undefined,
     file: typeof body.file === "string" ? body.file.slice(0, 200) : undefined,
     log: typeof body.log === "string" ? body.log.slice(0, 500) : undefined,
-    logs: Array.isArray(body.logs) ? body.logs.filter((item: unknown) => typeof item === "string") : undefined
+    logs: Array.isArray(body.logs)
+      ? body.logs
+          .filter((item: unknown): item is string => typeof item === "string")
+          .slice(0, 20)
+          .map((item: string) => item.slice(0, 500))
+      : undefined
   });
   res.json({ ok: true, agent });
 });
@@ -206,7 +211,7 @@ app.delete("/api/sessions/:id", async (req, res) => {
   }
 });
 
-app.get("/api/events", async (req, res) => {
+app.get("/api/events", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
@@ -215,37 +220,66 @@ app.get("/api/events", async (req, res) => {
   res.write(": connected\n\n");
 
   let closed = false;
-  req.on("close", () => {
-    closed = true;
-  });
+  let retryDelay = 1000;
+  const controller = new AbortController();
 
-  while (!closed) {
+  const safeWrite = (chunk: string): boolean => {
+    if (closed) return false;
     try {
-      const upstream = await fetch(`${BASE}/global/event`, {
-        headers: { ...upstreamHeaders(), accept: "text/event-stream" }
-      });
-      if (!upstream.ok || !upstream.body) {
-        throw new Error(`upstream HTTP ${upstream.status}`);
-      }
-      const reader = upstream.body.getReader();
-      const decoder = new TextDecoder();
-      while (!closed) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) res.write(decoder.decode(value, { stream: true }));
-      }
-      try {
-        await reader.cancel();
-      } catch {
-        /* ignore */
-      }
+      res.write(chunk);
+      return true;
     } catch {
-      if (closed) break;
-      res.write(": upstream retry\n\n");
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      closed = true;
+      return false;
     }
-  }
-  res.end();
+  };
+
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    controller.abort();
+  };
+  req.on("close", close);
+  res.on("close", close);
+
+  const run = async () => {
+    while (!closed) {
+      try {
+        const upstream = await fetch(`${BASE}/global/event`, {
+          headers: { ...upstreamHeaders(), accept: "text/event-stream" },
+          signal: controller.signal
+        });
+        if (!upstream.ok || !upstream.body) {
+          throw new Error(`upstream HTTP ${upstream.status}`);
+        }
+        retryDelay = 1000;
+        const reader = upstream.body.getReader();
+        const decoder = new TextDecoder();
+        while (!closed) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value && !safeWrite(decoder.decode(value, { stream: true }))) break;
+        }
+        try {
+          await reader.cancel();
+        } catch {
+          /* ignore */
+        }
+      } catch {
+        if (closed) break;
+        if (!safeWrite(": upstream retry\n\n")) break;
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+        retryDelay = Math.min(8000, retryDelay * 2);
+      }
+    }
+    try {
+      res.end();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  void run();
 });
 
 const webDist = join(process.cwd(), "dist", "web");

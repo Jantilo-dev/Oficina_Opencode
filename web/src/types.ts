@@ -60,6 +60,7 @@ export type Part = {
 
 export type AgentEvent = {
   type: string;
+  directory?: string;
   properties: Record<string, any>;
 };
 

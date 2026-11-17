@@ -1,3 +1,6 @@
+import { DEFAULT_PARTS, type CharacterLook, type CharacterParts } from "../characters";
+import type { ThemeName } from "../office/sprites";
+
 export type SceneStatus = "idle" | "thinking" | "coding" | "running_tool" | "talking" | "error";
 
 export type SceneAgent = {
@@ -7,6 +10,10 @@ export type SceneAgent = {
   task?: string;
   file?: string;
   logs: string[];
+  look?: CharacterLook;
+  spawnedAt?: number;
+  isManager?: boolean;
+  gender?: "male" | "female";
 };
 
 export type AgentColors = { shirt: string; shirtDark: string; hair: string; skin: string; pants: string };
@@ -21,6 +28,8 @@ export type AgentView = SceneAgent & {
 
 export type Cubicle = { x: number; y: number; w: number; h: number; seatX: number; seatY: number };
 
+export type Workstation = { kind: "cubicle"; cubicle: Cubicle; seatX: number; seatY: number };
+
 export const AREAS = [
   { id: "intranet", label: "AREA INTRANET", x: 30, y: 160, w: 360, h: 250 },
   { id: "logistica", label: "AREA LOGÍSTICA", x: 30, y: 420, w: 360, h: 230 },
@@ -28,8 +37,13 @@ export const AREAS = [
   { id: "soporte", label: "AREA SOPORTE", x: 440, y: 160, w: 350, h: 250 },
   { id: "portal", label: "AREA PORTAL", x: 440, y: 420, w: 350, h: 230 },
   { id: "reuniones", label: "SALA DE REUNIONES", x: 440, y: 660, w: 350, h: 290 },
-  { id: "bano", label: "BAÑO · 12", x: 840, y: 160, w: 410, h: 455 },
-  { id: "pasillo", label: "PASILLO", x: 840, y: 625, w: 410, h: 325 }
+  { id: "pasillo", label: "PASILLO", x: 840, y: 625, w: 410, h: 325 },
+  { id: "gerencia", label: "GERENCIA", x: 30, y: 1040, w: 380, h: 230 },
+  { id: "oficina2", label: "OFICINA 2", x: 450, y: 1040, w: 380, h: 230 },
+  { id: "oficina3", label: "OFICINA 3", x: 870, y: 1040, w: 380, h: 230 },
+  { id: "oficina4", label: "OFICINA 4", x: 30, y: 1340, w: 380, h: 230 },
+  { id: "oficina5", label: "OFICINA 5", x: 450, y: 1340, w: 380, h: 230 },
+  { id: "oficina6", label: "OFICINA 6", x: 870, y: 1340, w: 380, h: 230 }
 ] as const;
 
 export const CUBICLES: Cubicle[] = [
@@ -43,11 +57,47 @@ export const CUBICLES: Cubicle[] = [
   { x: 615, y: 462, w: 160, h: 168, seatX: 673, seatY: 586 }
 ];
 
+export const CUBICLES2: Cubicle[] = [
+  { x: 55, y: 1085, w: 160, h: 168, seatX: 113, seatY: 1209 },
+  { x: 225, y: 1085, w: 160, h: 168, seatX: 283, seatY: 1209 },
+  { x: 475, y: 1085, w: 160, h: 168, seatX: 533, seatY: 1209 },
+  { x: 645, y: 1085, w: 160, h: 168, seatX: 703, seatY: 1209 },
+  { x: 895, y: 1085, w: 160, h: 168, seatX: 953, seatY: 1209 },
+  { x: 1065, y: 1085, w: 160, h: 168, seatX: 1123, seatY: 1209 },
+  { x: 55, y: 1385, w: 160, h: 168, seatX: 113, seatY: 1509 },
+  { x: 225, y: 1385, w: 160, h: 168, seatX: 283, seatY: 1509 },
+  { x: 475, y: 1385, w: 160, h: 168, seatX: 533, seatY: 1509 },
+  { x: 645, y: 1385, w: 160, h: 168, seatX: 703, seatY: 1509 },
+  { x: 895, y: 1385, w: 160, h: 168, seatX: 953, seatY: 1509 },
+  { x: 1065, y: 1385, w: 160, h: 168, seatX: 1123, seatY: 1509 }
+];
+
+export const MANAGER_SEAT = CUBICLES.length;
+
+export const ENTRANCE = { x: 1228, y: 820 };
+
+export const RECEPTION_DESK = { x: 1100, y: 825, w: 120, h: 50, seatX: 1160, seatY: 812 };
+
+export const WORKSTATIONS: Workstation[] = [
+  ...CUBICLES.map((cubicle) => ({
+    kind: "cubicle" as const,
+    cubicle,
+    seatX: cubicle.seatX,
+    seatY: cubicle.seatY
+  })),
+  ...CUBICLES2.map((cubicle) => ({
+    kind: "cubicle" as const,
+    cubicle,
+    seatX: cubicle.seatX,
+    seatY: cubicle.seatY
+  }))
+];
+
 export const CAFE_SPOTS = [
   { x: 130, y: 900 },
   { x: 210, y: 900 },
   { x: 290, y: 900 },
-  { x: 160, y: 840 }
+  { x: 160, y: 875 }
 ];
 
 export const HALL_SPOTS = [
@@ -74,6 +124,66 @@ export function agentColors(id: string): AgentColors {
   };
 }
 
+const LOOK_PRESETS: Record<string, Partial<CharacterParts>> = {
+  ninja: { hair: "short", accessory: "headband", shirt: "#2f3550", hairColor: "#1f2333", skin: "#e8b98f" },
+  idol: { hair: "twin", accessory: "star", shirt: "#d05aa0", hairColor: "#5b3520", skin: "#f0c090" },
+  scientist: { hair: "short", accessory: "glasses", shirt: "#f4f6f8", hairColor: "#6b4a1e", skin: "#e8b98f" },
+  hero: { hair: "spiky", accessory: "cape", shirt: "#b3342f", hairColor: "#3a2a1a", skin: "#f0c090" },
+  samurai: { hair: "short", accessory: "headband", shirt: "#4a2f2f", hairColor: "#1b1b24", skin: "#d79a6a" },
+  mage: { hair: "long", accessory: "star", shirt: "#5a3a80", hairColor: "#6b4a1e", skin: "#e8b98f" },
+  mecha: { hair: "short", accessory: "glasses", shirt: "#3b4757", hairColor: "#1b1b24", skin: "#d79a6a" },
+  goth: { hair: "long", accessory: "none", shirt: "#2a2430", hairColor: "#1b1b24", skin: "#f0c090" }
+};
+
+function partsFor(look: CharacterLook | undefined): CharacterParts | undefined {
+  if (look?.parts) return look.parts;
+  if (look?.avatar && LOOK_PRESETS[look.avatar]) {
+    return { ...DEFAULT_PARTS, ...LOOK_PRESETS[look.avatar] };
+  }
+  return undefined;
+}
+
+function genderOf(id: string, look: CharacterLook | undefined): "male" | "female" {
+  if (look?.parts?.gender) return look.parts.gender;
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return hash % 2 === 0 ? "female" : "male";
+}
+
+function shadeColor(color: string, factor: number): string {
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return color;
+  const value = Number.parseInt(color.slice(1), 16);
+  const r = Math.max(0, Math.min(255, Math.round(((value >> 16) & 255) * factor)));
+  const g = Math.max(0, Math.min(255, Math.round(((value >> 8) & 255) * factor)));
+  const b = Math.max(0, Math.min(255, Math.round((value & 255) * factor)));
+  return `rgb(${r} ${g} ${b})`;
+}
+
+const avatarImages = new Map<string, HTMLImageElement>();
+
+function isDrawableAvatar(src: string | undefined): src is string {
+  return Boolean(src) && (src!.startsWith("data:image/") || src!.startsWith("blob:") || src!.startsWith("/"));
+}
+
+function avatarImage(src: string): HTMLImageElement | null {
+  if (typeof window === "undefined") return null;
+  let image = avatarImages.get(src);
+  if (!image) {
+    image = new Image();
+    image.src = src;
+    avatarImages.set(src, image);
+  }
+  return image.complete && image.naturalWidth > 0 ? image : null;
+}
+
+function drawAvatar(ctx: Ctx, src: string, x: number, y: number, width: number, height: number): boolean {
+  const image = avatarImage(src);
+  if (!image) return false;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(image, Math.round(x), Math.round(y), width, height);
+  return true;
+}
+
 type Ctx = CanvasRenderingContext2D;
 
 function rect(ctx: Ctx, x: number, y: number, w: number, h: number, color: string) {
@@ -82,19 +192,108 @@ function rect(ctx: Ctx, x: number, y: number, w: number, h: number, color: strin
 }
 
 const INK = "#1a2430";
-const WALL = "#c9cfd8";
-const WALL_DARK = "#a8b0bb";
-const WALL_LINE = "#b7bec8";
-const BASE = "#6f7884";
-const FLOOR = "#4a86d8";
-const FLOOR_HI = "#5b97e6";
-const FLOOR_LO = "#2f5f9f";
+let WALL = "#c9cfd8";
+let WALL_DARK = "#a8b0bb";
+let WALL_LINE = "#b7bec8";
+let BASE = "#6f7884";
+let FLOOR = "#4a86d8";
+let FLOOR_HI = "#5b97e6";
+let FLOOR_LO = "#2f5f9f";
 const WOOD = "#d9a86c";
 const WOOD_DARK = "#b9854f";
 const WOOD_EDGE = "#8a5a3b";
-const PANEL = "#b9c0c9";
-const PANEL_DARK = "#6b7480";
-const PANEL_TRIM = "#7fb2e8";
+let PANEL = "#b9c0c9";
+let PANEL_DARK = "#6b7480";
+let PANEL_TRIM = "#7fb2e8";
+let CORRIDOR = "#e6e9ee";
+let CORRIDOR_LINE = "#cfd5dd";
+let CORRIDOR_EDGE = "#c3cad4";
+
+type ScenePalette = {
+  wall: string;
+  wallDark: string;
+  wallLine: string;
+  base: string;
+  floor: string;
+  floorHi: string;
+  floorLo: string;
+  panel: string;
+  panelDark: string;
+  panelTrim: string;
+  corridor: string;
+  corridorLine: string;
+  corridorEdge: string;
+};
+
+const SCENE_PALETTES: Record<ThemeName, ScenePalette> = {
+  fuego: {
+    wall: "#c9cfd8",
+    wallDark: "#a8b0bb",
+    wallLine: "#b7bec8",
+    base: "#6f7884",
+    floor: "#4a86d8",
+    floorHi: "#5b97e6",
+    floorLo: "#2f5f9f",
+    panel: "#b9c0c9",
+    panelDark: "#6b7480",
+    panelTrim: "#7fb2e8",
+    corridor: "#e6e9ee",
+    corridorLine: "#cfd5dd",
+    corridorEdge: "#c3cad4"
+  },
+  rubi: {
+    wall: "#d9c2be",
+    wallDark: "#b79a95",
+    wallLine: "#c9aeaa",
+    base: "#806a68",
+    floor: "#a84a4a",
+    floorHi: "#c25a5a",
+    floorLo: "#7d3030",
+    panel: "#c9b6b2",
+    panelDark: "#806a68",
+    panelTrim: "#e08a7a",
+    corridor: "#f1e4e0",
+    corridorLine: "#d9c2be",
+    corridorEdge: "#c9aeaa"
+  },
+  esmeralda: {
+    wall: "#c2d4c8",
+    wallDark: "#9db3a2",
+    wallLine: "#b0c6b5",
+    base: "#667a6c",
+    floor: "#3f8f6a",
+    floorHi: "#50a87e",
+    floorLo: "#2b6b4c",
+    panel: "#b6c9bc",
+    panelDark: "#667a6c",
+    panelTrim: "#7fd0a0",
+    corridor: "#e6efe9",
+    corridorLine: "#cfded3",
+    corridorEdge: "#c0d2c6"
+  }
+};
+
+export function sceneBackground(theme: ThemeName): string {
+  const palette = SCENE_PALETTES[theme] ?? SCENE_PALETTES.fuego;
+  return palette.floor;
+}
+
+function applyTheme(theme: ThemeName) {
+  const palette = SCENE_PALETTES[theme] ?? SCENE_PALETTES.fuego;
+  WALL = palette.wall;
+  WALL_DARK = palette.wallDark;
+  WALL_LINE = palette.wallLine;
+  BASE = palette.base;
+  FLOOR = palette.floor;
+  FLOOR_HI = palette.floorHi;
+  FLOOR_LO = palette.floorLo;
+  PANEL = palette.panel;
+  PANEL_DARK = palette.panelDark;
+  PANEL_TRIM = palette.panelTrim;
+  CORRIDOR = palette.corridor;
+  CORRIDOR_LINE = palette.corridorLine;
+  CORRIDOR_EDGE = palette.corridorEdge;
+}
 
 function drawFloor(ctx: Ctx, width: number, height: number) {
   rect(ctx, 0, 0, width, height, FLOOR);
@@ -203,52 +402,108 @@ function hWall(ctx: Ctx, y: number, x1: number, x2: number, gaps: Array<[number,
   if (cursor < x2) drawWall(ctx, cursor, y, x2 - cursor, 10);
 }
 
+function drawCorridor(ctx: Ctx, x1: number, x2: number, y1: number, y2: number) {
+  rect(ctx, x1, y1, x2 - x1, y2 - y1, CORRIDOR);
+  for (let y = y1; y < y2; y += 32) {
+    rect(ctx, x1, y, x2 - x1, 1, CORRIDOR_LINE);
+  }
+  rect(ctx, x1, y1, 2, y2 - y1, CORRIDOR_EDGE);
+  rect(ctx, x2 - 2, y1, 2, y2 - y1, CORRIDOR_EDGE);
+}
+
 function drawCorridors(ctx: Ctx) {
   for (const [x1, x2] of [
     [390, 440],
     [790, 840]
   ]) {
-    rect(ctx, x1, 150, x2 - x1, 800, "#e6e9ee");
-    for (let y = 150; y < 950; y += 32) {
-      rect(ctx, x1, y, x2 - x1, 1, "#cfd5dd");
-    }
-    rect(ctx, x1, 150, 2, 800, "#c3cad4");
-    rect(ctx, x2 - 2, 150, 2, 800, "#c3cad4");
+    drawCorridor(ctx, x1, x2, 150, 950);
   }
+  drawCorridor(ctx, 30, 1240, 980, 1030);
+  drawCorridor(ctx, 410, 450, 980, 1620);
+  drawCorridor(ctx, 830, 870, 980, 1620);
+  drawCorridor(ctx, 30, 1240, 1270, 1330);
+  drawCorridor(ctx, 30, 1240, 1570, 1620);
 }
 
 function drawRooms(ctx: Ctx) {
-  drawWall(ctx, 18, 150, 12, 800);
-  drawWall(ctx, 1250, 150, 12, 800);
-  drawWall(ctx, 18, 950, 1244, 12);
+  drawWall(ctx, 18, 150, 12, 1470);
+  drawWall(ctx, 1250, 150, 12, 1470);
+  hWall(ctx, 950, 18, 1262, [[610, 668]]);
+  drawWall(ctx, 30, 962, 580, 18);
+  drawWall(ctx, 668, 962, 572, 18);
+  drawWall(ctx, 18, 1620, 1244, 12);
+
+  hWall(ctx, 1040, 30, 410, []);
+  hWall(ctx, 1040, 450, 830, []);
+  hWall(ctx, 1040, 870, 1250, []);
+  hWall(ctx, 1270, 30, 410, [[200, 240]]);
+  hWall(ctx, 1270, 450, 830, [[620, 660]]);
+  hWall(ctx, 1270, 870, 1250, [[1040, 1080]]);
+  hWall(ctx, 1340, 30, 410, []);
+  hWall(ctx, 1340, 450, 830, []);
+  hWall(ctx, 1340, 870, 1250, []);
+  hWall(ctx, 1570, 30, 410, [[200, 240]]);
+  hWall(ctx, 1570, 450, 830, [[620, 660]]);
+  hWall(ctx, 1570, 870, 1250, [[1040, 1080]]);
+
+  vWall(ctx, 30, 1040, 1270, []);
+  vWall(ctx, 410, 1040, 1270, []);
+  vWall(ctx, 450, 1040, 1270, []);
+  vWall(ctx, 830, 1040, 1270, []);
+  vWall(ctx, 870, 1040, 1270, []);
+  vWall(ctx, 30, 1340, 1570, []);
+  vWall(ctx, 410, 1340, 1570, []);
+  vWall(ctx, 450, 1340, 1570, []);
+  vWall(ctx, 830, 1340, 1570, []);
+  vWall(ctx, 870, 1340, 1570, []);
 
   const gaps: Array<[number, number]> = [
-    [320, 352],
-    [552, 584],
-    [800, 832]
+    [316, 356],
+    [384, 432],
+    [548, 588],
+    [620, 660],
+    [796, 836]
   ];
   vWall(ctx, 382, 150, 950, gaps);
   vWall(ctx, 440, 150, 950, gaps);
   vWall(ctx, 790, 150, 950, gaps);
   vWall(ctx, 840, 150, 950, [
-    [320, 352],
-    [750, 782]
+    [316, 356],
+    [384, 432],
+    [548, 588],
+    [620, 660],
+    [746, 786],
+    [796, 836]
   ]);
 
-  hWall(ctx, 410, 30, 382, [[160, 192]]);
-  hWall(ctx, 410, 448, 790, [[560, 592]]);
-  hWall(ctx, 655, 30, 382, [[160, 192]]);
-  hWall(ctx, 655, 448, 790, [[560, 592]]);
-  hWall(ctx, 615, 848, 1250, [[1000, 1032]]);
+  hWall(ctx, 410, 30, 382, [[156, 196]]);
+  hWall(ctx, 410, 448, 790, [[556, 596]]);
+  hWall(ctx, 655, 30, 382, [[156, 196]]);
+  hWall(ctx, 655, 448, 790, [[556, 596]]);
+  hWall(ctx, 615, 848, 1250, [
+    [960, 992],
+    [1120, 1152]
+  ]);
 
   for (const [, to] of gaps) {
     rect(ctx, 384, to - 26, 6, 22, "#a07a52");
     rect(ctx, 442, to - 26, 6, 22, "#a07a52");
     rect(ctx, 792, to - 26, 6, 22, "#a07a52");
+    rect(ctx, 842, to - 26, 6, 22, "#a07a52");
   }
-  rect(ctx, 842, 326, 6, 22, "#a07a52");
-  rect(ctx, 842, 756, 6, 22, "#a07a52");
   rect(ctx, 1004, 617, 24, 6, "#a07a52");
+
+  for (const [cx, door] of [
+    [220, 1270],
+    [640, 1270],
+    [1060, 1270],
+    [220, 1570],
+    [640, 1570],
+    [1060, 1570]
+  ]) {
+    rect(ctx, cx - 20, door, 40, 10, "#eef1f5");
+    rect(ctx, cx - 16, door + 2, 32, 6, "#9aa3ae");
+  }
 }
 
 function drawAreaLabel(ctx: Ctx, x: number, y: number, text: string) {
@@ -329,26 +584,36 @@ function drawBathroom(ctx: Ctx) {
     rect(ctx, x, 168, 1, 439, "#cfd5dd");
   }
 
-  for (let row = 0; row < 2; row++) {
-    for (let i = 0; i < 6; i++) {
-      const sx = 858 + i * 63;
-      const sy = row === 0 ? 200 : 440;
-      rect(ctx, sx, sy, 56, 84, "#dfe4ea");
-      rect(ctx, sx, sy, 56, 3, "#f4f6f8");
-      rect(ctx, sx, sy, 3, 84, "#b7bec8");
-      rect(ctx, sx + 53, sy, 3, 84, "#b7bec8");
-      rect(ctx, sx + 18, sy + 52, 20, 4, "#c9cfd8");
-      rect(ctx, sx + 20, sy + 56, 16, 22, "#f4f6f8");
-      rect(ctx, sx + 20, sy + 78, 16, 3, "#c9cfd8");
+  for (const [side, start] of [
+    ["left", 858],
+    ["right", 1050]
+  ] as const) {
+    for (let row = 0; row < 2; row++) {
+      for (let i = 0; i < 3; i++) {
+        const sx = start + i * 60;
+        const sy = row === 0 ? 200 : 440;
+        rect(ctx, sx, sy, 56, 84, "#dfe4ea");
+        rect(ctx, sx, sy, 56, 3, "#f4f6f8");
+        rect(ctx, sx, sy, 3, 84, "#b7bec8");
+        rect(ctx, sx + 53, sy, 3, 84, "#b7bec8");
+        rect(ctx, sx + 18, sy + 52, 20, 4, "#c9cfd8");
+        rect(ctx, sx + 20, sy + 56, 16, 22, "#f4f6f8");
+        rect(ctx, sx + 20, sy + 78, 16, 3, "#c9cfd8");
+      }
+    }
+    const sinkX = side === "left" ? 876 : 1068;
+    rect(ctx, sinkX, 350, 120, 12, "#c9cfd8");
+    for (let i = 0; i < 3; i++) {
+      rect(ctx, sinkX + 8 + i * 35, 344, 20, 14, "#f4f6f8");
+      rect(ctx, sinkX + 8 + i * 35, 330, 20, 10, "#a8d6e8");
     }
   }
 
-  rect(ctx, 930, 350, 220, 12, "#c9cfd8");
-  for (let i = 0; i < 6; i++) {
-    rect(ctx, 940 + i * 35, 344, 20, 14, "#f4f6f8");
-    rect(ctx, 940 + i * 35, 330, 20, 10, "#a8d6e8");
-  }
-  drawPlant(ctx, 1190, 540);
+  drawWall(ctx, 1040, 168, 10, 457);
+  drawAreaLabel(ctx, 944, 190, "HOMBRES");
+  drawAreaLabel(ctx, 1142, 190, "MUJERES");
+  drawPlant(ctx, 850, 540);
+  drawPlant(ctx, 1200, 540);
 }
 
 function drawPasillo(ctx: Ctx) {
@@ -363,8 +628,37 @@ function drawPasillo(ctx: Ctx) {
   rect(ctx, 1023, 763, 64, 20, WOOD);
   drawPlant(ctx, 1180, 680);
   drawPlant(ctx, 870, 860);
-  rect(ctx, 1060, 840, 80, 34, "#2f5f95");
-  rect(ctx, 1064, 844, 72, 12, "#3f6fad");
+}
+
+function drawReception(ctx: Ctx) {
+  const { x, y, w, h } = RECEPTION_DESK;
+  rect(ctx, x + 6, y + h - 2, w - 12, 8, "#1f3f7533");
+  rect(ctx, x, y, w, 12, WOOD);
+  rect(ctx, x, y, w, 2, "#ecc48c");
+  rect(ctx, x, y + 12, w, 10, WOOD_DARK);
+  rect(ctx, x + 8, y + 22, 7, 24, WOOD_EDGE);
+  rect(ctx, x + w - 15, y + 22, 7, 24, WOOD_EDGE);
+  rect(ctx, x + w - 38, y - 16, 24, 18, "#222932");
+  rect(ctx, x + w - 35, y - 13, 18, 10, "#3b4757");
+  rect(ctx, x + w - 30, y - 9, 8, 2, "#83c8dc");
+  rect(ctx, x + 18, y + 4, 34, 8, "#3a414d");
+  rect(ctx, x + 20, y + 6, 30, 2, "#8a94a2");
+  rect(ctx, x + 62, y + 4, 16, 8, "#c9cfd8");
+  rect(ctx, x + 65, y + 6, 10, 2, "#6b7480");
+  rect(ctx, x + 18, y - 12, 28, 8, "#f4f6f8");
+  rect(ctx, x + 20, y - 10, 24, 2, "#8a5a3b");
+}
+
+function drawEntrance(ctx: Ctx) {
+  const y = 794;
+  rect(ctx, 1246, y - 6, 16, 66, "#9aa2ad");
+  rect(ctx, 1250, y, 10, 26, "#2f5f95");
+  rect(ctx, 1250, y + 30, 10, 26, "#2f5f95");
+  rect(ctx, 1252, y + 4, 6, 18, "#4f86c0");
+  rect(ctx, 1252, y + 34, 6, 18, "#4f86c0");
+  rect(ctx, 1258, y + 24, 3, 8, "#d8dce2");
+  rect(ctx, 1216, y + 58, 34, 5, "#2f5f95");
+  rect(ctx, 1220, y + 63, 30, 3, "#4f7fbd");
 }
 
 function drawCubicle(ctx: Ctx, cubicle: Cubicle, index: number, screenOn: boolean, t: number) {
@@ -404,6 +698,7 @@ function drawCubicle(ctx: Ctx, cubicle: Cubicle, index: number, screenOn: boolea
   drawLaptop(ctx, x + 22, deskTop, screenOn, t);
   drawSideMonitor(ctx, x + w - 54, deskTop, screenOn, t);
 
+  rect(ctx, x + 52, deskTop + 2, 36, 8, "#232a33");
   rect(ctx, x + 54, deskTop + 3, 32, 6, "#3a414d");
   for (let row = 0; row < 2; row++) {
     for (let col = 0; col < 10; col++) {
@@ -411,15 +706,26 @@ function drawCubicle(ctx: Ctx, cubicle: Cubicle, index: number, screenOn: boolea
     }
   }
   if (screenOn) {
-    const key = Math.floor((t / 140 + index * 3) % 10);
+    const key = Math.floor((t / 120 + index * 3) % 10);
+    const key2 = (key + 4) % 10;
     rect(ctx, x + 55 + key * 3, deskTop + 4, 2, 1, "#f2d24a");
+    rect(ctx, x + 55 + key2 * 3, deskTop + 6, 2, 1, "#83c8dc");
   }
+  rect(ctx, x + 54, deskTop + 10, 30, 2, "#1b2028");
   const mouseX = x + 96 + (screenOn ? Math.sin(t / 220 + index) * 2 : 0);
+  ctx.fillStyle = "#1b2028";
+  ctx.beginPath();
+  ctx.ellipse(mouseX, deskTop + 7, 5, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = "#3a414d";
   ctx.beginPath();
-  ctx.ellipse(mouseX, deskTop + 7, 4, 3, 0, 0, Math.PI * 2);
+  ctx.ellipse(mouseX, deskTop + 6, 4, 3, 0, 0, Math.PI * 2);
   ctx.fill();
-  if (screenOn) rect(ctx, mouseX - 1, deskTop + 5, 2, 1, "#8fd0f0");
+  rect(ctx, mouseX + 3, deskTop + 2, 1, 4, "#141920");
+  if (screenOn) {
+    rect(ctx, mouseX - 1, deskTop + 5, 2, 1, "#8fd0f0");
+    rect(ctx, x + 52, deskTop + 2, 36, 1, "#7fd0e855");
+  }
 
   const chair = ["#c0392b", "#3f8f57", "#2f5f95", "#d08a2e"][index % 4];
   rect(ctx, x + 30, deskTop - 36, 10, 36, chair);
@@ -437,13 +743,16 @@ function drawLaptop(ctx: Ctx, x: number, deskTop: number, screenOn: boolean, t: 
   for (let i = 0; i < 4; i++) {
     rect(ctx, x + 3 + i * 5, deskTop + 6, 3, 1, screenOn && i === Math.floor(t / 200) % 4 ? "#f2d24a" : "#8f97a3");
   }
-  rect(ctx, x + 2, deskTop - 14, 22, 14, "#b9c0ca");
+  rect(ctx, x + 2, deskTop - 14, 22, 14, screenOn ? "#c9d8e0" : "#a8b2bc");
   rect(ctx, x + 2, deskTop - 14, 22, 2, "#e4e8ee");
   rect(ctx, x + 18, deskTop - 12, 2, 10, "#8f98a3");
   rect(ctx, x + 2, deskTop - 12, 3, 10, screenOn ? "#7fd0e8" : "#39424e");
+  rect(ctx, x + 19, deskTop - 6, 2, 2, screenOn ? "#63e6a8" : "#5a2a2a");
   if (screenOn) {
     rect(ctx, x + 2, deskTop - 4, 3, 2, "#c9f0fa");
     rect(ctx, x, deskTop + 10, 24, 2, "#7fd0e833");
+    ctx.fillStyle = "rgba(127, 208, 232, 0.10)";
+    ctx.fillRect(x - 3, deskTop - 16, 28, 20);
   }
 }
 
@@ -456,16 +765,29 @@ function drawSideMonitor(ctx: Ctx, x: number, deskTop: number, screenOn: boolean
   rect(ctx, x + 2, deskTop + 4, w - 4, 2, "#00000022");
 
   rect(ctx, x, top, w, h, "#222932");
-  rect(ctx, x + 2, top + 2, w - 4, h - 4, "#333d4a");
-  for (let i = 0; i < 4; i++) {
-    rect(ctx, x + 7, top + 7 + i * 4, w - 14, 2, "#2a3340");
+  rect(ctx, x + 2, top + 2, w - 4, h - 4, screenOn ? "#2f5f88" : "#1b232d");
+  if (screenOn) {
+    rect(ctx, x + 3, top + 3, w - 6, 2, "#4f9fd0");
+    rect(ctx, x + 5, top + 8, w - 13, 2, "#83c8dc");
+    rect(ctx, x + 5, top + 12, w - 18, 2, "#5f9fc0");
+    rect(ctx, x + 5, top + 16, w - 10, 2, "#3f7fa8");
+    if (Math.floor(t / 500) % 2 === 0) rect(ctx, x + 5, top + 20, 4, 2, "#c9f0fa");
+  } else {
+    ctx.strokeStyle = "#ffffff18";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + 5, top + h - 5);
+    ctx.lineTo(x + w - 7, top + 5);
+    ctx.stroke();
   }
   rect(ctx, x, top + 2, 4, h - 4, screenOn ? "#7fd0e8" : "#39424e");
   if (screenOn) {
     rect(ctx, x, top + 4, 2, h - 8, "#c9f0fa");
     const pulse = 0.5 + Math.sin(t / 500) * 0.5;
-    ctx.fillStyle = `rgba(127, 208, 232, ${0.12 + pulse * 0.12})`;
-    ctx.fillRect(x - 4, top + 2, 8, h - 4);
+    ctx.fillStyle = `rgba(127, 208, 232, ${0.14 + pulse * 0.16})`;
+    ctx.fillRect(x - 5, top + 1, 10, h - 2);
+    ctx.fillStyle = `rgba(127, 208, 232, ${0.06 + pulse * 0.08})`;
+    ctx.fillRect(x - 10, top + 5, 20, h - 10);
     rect(ctx, x + 2, deskTop + 3, w - 8, 2, "#7fd0e8aa");
   }
   rect(ctx, x, top, w, 2, "#4a5666");
@@ -473,67 +795,157 @@ function drawSideMonitor(ctx: Ctx, x: number, deskTop: number, screenOn: boolean
   rect(ctx, x + w - 8, top + h - 7, 3, 3, screenOn ? "#63e6a8" : "#5a2a2a");
 }
 
+function drawHair(ctx: Ctx, x: number, baseY: number, hair: string, style: CharacterParts["hair"] | undefined) {
+  if (style === "long") {
+    rect(ctx, x - 10, baseY - 42, 4, 20, hair);
+    rect(ctx, x + 12, baseY - 42, 4, 20, hair);
+  } else if (style === "twin") {
+    rect(ctx, x - 12, baseY - 40, 4, 14, hair);
+    rect(ctx, x + 14, baseY - 40, 4, 14, hair);
+  } else if (style === "spiky") {
+    rect(ctx, x - 6, baseY - 48, 3, 4, hair);
+    rect(ctx, x - 1, baseY - 50, 3, 6, hair);
+    rect(ctx, x + 5, baseY - 48, 3, 5, hair);
+    rect(ctx, x + 10, baseY - 46, 3, 4, hair);
+  }
+}
+
+function drawAccessory(
+  ctx: Ctx,
+  x: number,
+  baseY: number,
+  accessory: CharacterParts["accessory"] | undefined,
+  color: string
+) {
+  if (accessory === "glasses") {
+    rect(ctx, x, baseY - 39, 5, 3, "#2a2a2e");
+    rect(ctx, x + 6, baseY - 39, 5, 3, "#2a2a2e");
+    rect(ctx, x + 5, baseY - 38, 1, 1, "#2a2a2e");
+  } else if (accessory === "headband") {
+    rect(ctx, x - 8, baseY - 41, 24, 2, color);
+  } else if (accessory === "star") {
+    rect(ctx, x + 2, baseY - 20, 3, 3, "#f2c24a");
+  }
+}
+
 function drawChibiSeated(ctx: Ctx, agent: AgentView, t: number) {
-  const { x, y, colors, status } = agent;
+  const { x, y, colors, status, look } = agent;
+  const parts = partsFor(look);
+  const gender = genderOf(agent.id, look);
+  const shirt = parts?.shirt ?? colors.shirt;
+  const shirtDark = parts?.shirt ? shadeColor(parts.shirt, 0.74) : colors.shirtDark;
+  const hair = parts?.hairColor ?? colors.hair;
+  const skin = parts?.skin ?? colors.skin;
+  const hairStyle = parts?.hair ?? (look?.avatar ? undefined : gender === "female" ? "long" : "short");
   const bob = status === "thinking" ? Math.sin(t / 400 + x) * 1.2 : 0;
   const baseY = y + bob;
   rect(ctx, x - 6, baseY - 2, 28, 4, "#00000022");
-  rect(ctx, x - 4, baseY - 24, 16, 20, INK);
-  rect(ctx, x - 2, baseY - 22, 12, 16, colors.shirt);
-  rect(ctx, x + 2, baseY - 22, 4, 12, "#f4f6f8");
-  rect(ctx, x + 3, baseY - 20, 2, 8, colors.shirtDark);
-  const typing = status === "coding" ? Math.sin(t / 80 + x) * 2 : 0;
-  const mouseMove = status === "coding" ? Math.sin(t / 160 + x) * 1.6 : 0;
-  rect(ctx, x + 8, baseY - 18, 9, 4, colors.shirt);
-  rect(ctx, x + 15, baseY - 15, 4, 9, colors.shirtDark);
-  rect(ctx, x + 13, baseY - 7, 5, 3, colors.shirt);
-  rect(ctx, x + 12, baseY - 2 + typing * 0.35, 5, 4, colors.skin);
 
-  rect(ctx, x + 7, baseY - 14, 12, 3, colors.shirtDark);
-  rect(ctx, x + 17, baseY - 12, 4, 7, colors.shirt);
-  rect(ctx, x + 20, baseY - 6, 13, 3, colors.shirtDark);
-  rect(ctx, x + 31 + mouseMove, baseY - 2, 5, 4, colors.skin);
-
-  if (status === "thinking") {
-    rect(ctx, x + 6, baseY - 30, 3, 9, colors.shirt);
-    rect(ctx, x + 9, baseY - 33, 4, 4, colors.skin);
+  if (look && isDrawableAvatar(look.avatar) && drawAvatar(ctx, look.avatar, x - 14, baseY - 52, 32, 46)) {
+    if (status === "error") rect(ctx, x - 14, baseY - 52, 32, 46, "#b3342f33");
+    return;
   }
 
+  if (parts?.accessory === "cape") rect(ctx, x - 8, baseY - 24, 5, 20, "#b3342f");
+  rect(ctx, x - 4, baseY - 24, 16, 20, INK);
+  rect(ctx, x - 2, baseY - 22, 12, 16, shirt);
+  rect(ctx, x + 2, baseY - 22, 4, 12, "#f4f6f8");
+  rect(ctx, x + 3, baseY - 20, 2, 8, shirtDark);
+  const active = status === "coding" || status === "running_tool";
+  const typing = active ? Math.sin(t / 90 + x) * 1.5 : 0;
+  const mouseMove = active ? Math.sin(t / 180 + x) * 2 : 0;
+
+  rect(ctx, x + 1, baseY - 21, 5, 8, shirt);
+  rect(ctx, x + 2, baseY - 15, 5, 8, shirtDark);
+  rect(ctx, x + 3, baseY - 8, 2, 2, "#f4f6f8");
+  rect(ctx, x + 2, baseY - 7, 4, 6, skin);
+  rect(ctx, x + 1, baseY + 2 + typing, 7, 4, skin);
+  rect(ctx, x + 2, baseY + 4 + typing, 3, 2, skin);
+  rect(ctx, x + 6, baseY + 2 + typing, 2, 2, skin);
+
+  if (status !== "thinking") {
+    rect(ctx, x + 8, baseY - 20, 6, 6, shirt);
+    rect(ctx, x + 14, baseY - 18, 9, 5, shirtDark);
+    rect(ctx, x + 23, baseY - 16, 6, 5, shirt);
+    rect(ctx, x + 28, baseY - 13, 3, 3, "#f4f6f8");
+    rect(ctx, x + 28, baseY - 11, 3, 8, skin);
+    rect(ctx, x + 31 + mouseMove, baseY + 1, 6, 4, skin);
+    rect(ctx, x + 34 + mouseMove, baseY + 3, 2, 2, skin);
+  }
+
+  drawHair(ctx, x, baseY, hair, hairStyle);
   rect(ctx, x - 8, baseY - 42, 24, 20, INK);
-  rect(ctx, x - 6, baseY - 40, 20, 17, colors.skin);
-  rect(ctx, x - 7, baseY - 44, 22, 5, colors.hair);
-  rect(ctx, x - 9, baseY - 40, 4, 12, colors.hair);
-  rect(ctx, x + 12, baseY - 35, 3, 4, colors.skin);
+  rect(ctx, x - 6, baseY - 40, 20, 17, skin);
+  rect(ctx, x - 7, baseY - 44, 22, 5, hair);
+  rect(ctx, x - 9, baseY - 40, 4, 12, hair);
+  rect(ctx, x + 12, baseY - 35, 3, 4, skin);
   rect(ctx, x + 1, baseY - 38, 3, 2, INK);
   rect(ctx, x + 6, baseY - 38, 3, 2, INK);
   rect(ctx, x + 3, baseY - 31, 6, 2, "#a35a44");
   rect(ctx, x + 8, baseY - 22, 2, 16, "#00000022");
   rect(ctx, x + 8, baseY - 40, 4, 17, "#00000012");
+  drawAccessory(ctx, x, baseY, parts?.accessory, "#c0392b");
+  if (status === "thinking") {
+    rect(ctx, x + 7, baseY - 25, 5, 9, shirt);
+    rect(ctx, x + 8, baseY - 32, 4, 8, shirtDark);
+    rect(ctx, x + 7, baseY - 35, 5, 4, skin);
+    rect(ctx, x + 6, baseY - 33, 2, 2, skin);
+  }
   if (status === "error") {
     rect(ctx, x - 8, baseY - 44, 24, 20, "#b3342f33");
   }
 }
 
 function drawChibiStanding(ctx: Ctx, agent: AgentView, t: number, walking: boolean) {
-  const { x, y, colors } = agent;
-  const step = walking ? Math.sin(t / 110 + x) : 0;
+  const { x, y, colors, look } = agent;
+  const parts = partsFor(look);
+  const gender = genderOf(agent.id, look);
+  const shirt = parts?.shirt ?? colors.shirt;
+  const shirtDark = parts?.shirt ? shadeColor(parts.shirt, 0.74) : colors.shirtDark;
+  const hair = parts?.hairColor ?? colors.hair;
+  const skin = parts?.skin ?? colors.skin;
+  const hairStyle = parts?.hair ?? (look?.avatar ? undefined : gender === "female" ? "long" : "short");
+  const phase = t / 90 + x * 0.35;
+  const swing = walking ? Math.sin(phase) : 0;
+  const bob = walking ? Math.abs(Math.sin(phase)) * 1.2 : 0;
+  const baseY = y - bob;
   rect(ctx, x - 14, y + 4, 30, 6, "#00000033");
-  rect(ctx, x - 6, y - 14 + step, 5, 16, colors.pants);
-  rect(ctx, x + 4, y - 14 - step, 5, 16, colors.pants);
-  rect(ctx, x - 9, y - 32, 20, 18, INK);
-  rect(ctx, x - 7, y - 30, 16, 15, colors.shirt);
-  rect(ctx, x - 2, y - 30, 5, 11, "#f4f6f8");
-  rect(ctx, x - 12, y - 28 + step * 0.6, 4, 12, colors.shirt);
-  rect(ctx, x + 10, y - 28 - step * 0.6, 4, 12, colors.shirt);
-  rect(ctx, x - 12, y - 44, 24, 20, INK);
-  rect(ctx, x - 10, y - 42, 20, 17, colors.skin);
-  rect(ctx, x - 11, y - 46, 22, 5, colors.hair);
-  rect(ctx, x - 13, y - 42, 4, 12, colors.hair);
-  rect(ctx, x - 4, y - 40, 3, 2, INK);
-  rect(ctx, x + 3, y - 40, 3, 2, INK);
-  rect(ctx, x - 1, y - 33, 6, 2, "#a35a44");
-  rect(ctx, x + 7, y - 30, 2, 15, "#00000022");
-  rect(ctx, x + 7, y - 42, 4, 17, "#00000012");
+
+  if (look && isDrawableAvatar(look.avatar) && drawAvatar(ctx, look.avatar, x - 16, baseY - 52, 32, 50)) {
+    return;
+  }
+
+  if (parts?.accessory === "cape") rect(ctx, x - 8, baseY - 32, 5, 22, "#b3342f");
+  if (gender === "female") {
+    rect(ctx, x - 8, baseY - 14 + swing * 1.4, 18, 10, colors.pants);
+    rect(ctx, x - 8, baseY - 5 + swing * 1.4, 18, 2, "#00000022");
+    rect(ctx, x - 5, baseY - 12 + swing * 1.4, 5, 8, skin);
+    rect(ctx, x + 2, baseY - 12 - swing * 1.4, 5, 8, skin);
+  } else {
+    rect(ctx, x - 6, baseY - 14 + swing * 2.2, 5, 15, colors.pants);
+    rect(ctx, x + 4, baseY - 14 - swing * 2.2, 5, 15, colors.pants);
+  }
+  rect(ctx, x - 8 + swing * 1.6, baseY - 2 + swing * 3, 6, 3, "#1f1a16");
+  rect(ctx, x + 3 - swing * 1.6, baseY - 2 - swing * 3, 6, 3, "#1f1a16");
+
+  drawHair(ctx, x, baseY, hair, hairStyle);
+  rect(ctx, x - 9, baseY - 32, 20, 18, INK);
+  rect(ctx, x - 7, baseY - 30, 16, 15, shirt);
+  rect(ctx, x - 2, baseY - 30, 5, 11, "#f4f6f8");
+  rect(ctx, x - 12, baseY - 28 + swing * 3, 4, 12, shirt);
+  rect(ctx, x + 10, baseY - 28 - swing * 3, 4, 12, shirt);
+  rect(ctx, x - 13, baseY - 15 + swing * 3, 4, 3, skin);
+  rect(ctx, x + 9, baseY - 15 - swing * 3, 4, 3, skin);
+  rect(ctx, x - 12, baseY - 44, 24, 20, INK);
+  rect(ctx, x - 10, baseY - 42, 20, 17, skin);
+  rect(ctx, x - 11, baseY - 46, 22, 5, hair);
+  rect(ctx, x - 13, baseY - 42, 4, 12, hair);
+  rect(ctx, x - 4, baseY - 40, 3, 2, INK);
+  rect(ctx, x + 3, baseY - 40, 3, 2, INK);
+  rect(ctx, x - 1, baseY - 33, 6, 2, "#a35a44");
+  rect(ctx, x + 7, baseY - 30, 2, 15, "#00000022");
+  rect(ctx, x + 7, baseY - 42, 4, 17, "#00000012");
+  drawAccessory(ctx, x, baseY, parts?.accessory, "#c0392b");
 }
 
 function drawBubble(ctx: Ctx, agent: AgentView, t: number) {
@@ -605,6 +1017,19 @@ function drawNameplate(ctx: Ctx, agent: AgentView, selected: boolean) {
   ctx.fillText(label, agent.x + 2, y - 3);
 }
 
+type Box = { x: number; y: number; w: number; h: number };
+
+function nameplateBox(ctx: Ctx, agent: AgentView): Box {
+  ctx.font = "bold 10px ui-monospace, Consolas, monospace";
+  const label = agent.name.length > 22 ? `${agent.name.slice(0, 21)}…` : agent.name;
+  const width = ctx.measureText(label).width + 18;
+  return { x: agent.x - width / 2 - 2, y: agent.y - 72, w: width + 4, h: 20 };
+}
+
+function overlaps(a: Box, b: Box): boolean {
+  return !(a.x + a.w + 2 < b.x || b.x + b.w + 2 < a.x || a.y + a.h + 2 < b.y || b.y + b.h + 2 < a.y);
+}
+
 export function drawScene(
   ctx: Ctx,
   width: number,
@@ -612,8 +1037,11 @@ export function drawScene(
   agents: AgentView[],
   t: number,
   selectedId: string | null,
-  screenStates: boolean[] = []
+  screenStates: boolean[] = [],
+  hoverId: string | null = null,
+  theme: ThemeName = "fuego"
 ) {
+  applyTheme(theme);
   ctx.imageSmoothingEnabled = false;
   drawFloor(ctx, width, height);
   drawCorridors(ctx);
@@ -624,19 +1052,56 @@ export function drawScene(
   drawBathroom(ctx);
   drawPasillo(ctx);
   drawRooms(ctx);
+  drawEntrance(ctx);
+  drawReception(ctx);
   for (const area of AREAS) {
     drawAreaLabel(ctx, area.x + area.w / 2, area.y + 22, area.label);
   }
-  for (let i = 0; i < CUBICLES.length; i++) {
-    drawCubicle(ctx, CUBICLES[i], i, screenStates[i] ?? false, t);
+  for (let i = 0; i < WORKSTATIONS.length; i++) {
+    drawCubicle(ctx, WORKSTATIONS[i].cubicle, i, screenStates[i] ?? false, t);
   }
 
-  const sorted = [...agents].sort((a, b) => a.y - b.y);
+  const receptionist: AgentView = {
+    id: "reception",
+    name: "RECEPCIÓN",
+    status: "idle",
+    logs: [],
+    x: RECEPTION_DESK.seatX,
+    y: RECEPTION_DESK.seatY,
+    walking: false,
+    seated: true,
+    colors: agentColors("receptionist"),
+    look: {
+      name: "Recepcionista",
+      parts: {
+        hair: "twin",
+        hairColor: "#5b3520",
+        shirt: "#2f6fbf",
+        skin: "#e8b98f",
+        accessory: "headband"
+      }
+    }
+  };
+  const sorted = [...agents, receptionist].sort((a, b) => a.y - b.y);
+  const priority: AgentView[] = [];
+  const labels: AgentView[] = [];
   for (const agent of sorted) {
+    if (agent.id === selectedId || agent.id === hoverId) priority.push(agent);
+    else labels.push(agent);
     if (agent.seated) drawChibiSeated(ctx, agent, t);
     else drawChibiStanding(ctx, agent, t, agent.walking);
     if (agent.status !== "talking") drawBubble(ctx, agent, t);
-    drawNameplate(ctx, agent, agent.id === selectedId);
+  }
+
+  const boxes: Box[] = priority.map((agent) => nameplateBox(ctx, agent));
+  for (const agent of labels) {
+    const box = nameplateBox(ctx, agent);
+    if (boxes.some((other) => overlaps(box, other))) continue;
+    boxes.push(box);
+    drawNameplate(ctx, agent, false);
+  }
+  for (const agent of priority) {
+    drawNameplate(ctx, agent, true);
   }
 
   const talking = agents.filter((agent) => agent.status === "talking");

@@ -201,6 +201,10 @@ body {
   padding: 5px 12px;
 }
 
+.empty .btn {
+  pointer-events: auto;
+}
+
 .side {
   width: 320px;
   flex: 0 0 320px;
