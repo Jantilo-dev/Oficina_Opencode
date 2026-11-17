@@ -81,7 +81,7 @@ web/
       sprites.ts             Escena 2.5D: áreas, muebles, chibis, burbujas, temas
       occupancy.ts           Puestos, spots, pausas y overflow
       navigation.ts          Rejilla A*, muros/muebles y puertas transitables
-      OfficeCanvas.tsx       Asignación, movimiento, hit-test, escala
+      OfficeCanvas.tsx       Asignación, movimiento, zoom/pan, hit-test
       AgentPanel.tsx         Panel retro de detalle por agente
     components/              NewSessionModal, SessionChat, CharacterModal
     office/                  Implementación anterior (mantener tipos/preview)
@@ -160,7 +160,8 @@ curl.exe -X POST http://127.0.0.1:5174/api/agents/report `
 - Pixel art 2.5D, bordes oscuros, `imageSmoothingEnabled = false` y
   `image-rendering: pixelated`.
 - Suelo de ladrillo según tema; pared superior con ventanas, calendario y puertas
-  de cristal. Pasillos verticales claros entre columnas.
+  de cristal. Pasillos verticales arriba y red de pasillos verticales y
+  horizontales en la planta baja.
 - Áreas superiores: **AREA INTRANET**, **AREA LOGÍSTICA**, **AREA SOPORTE**,
   **AREA PORTAL** (dos cubículos cada una), **SALA DE REUNIONES**, **COCINA**,
   **PASILLO** (entrada y recepción) y **BAÑO** dividido en **HOMBRES** y
@@ -192,8 +193,8 @@ curl.exe -X POST http://127.0.0.1:5174/api/agents/report `
   con LED rojo.
 - Manos en teclado y ratón; teclas y ratón animados al `coding`; mano a la barbilla
   al `thinking`.
-- Género: `CharacterParts.gender` o derivado del id; las mujeres usan pelo largo y
-  falda, los hombres pelo corto y pantalón.
+- Género: `CharacterParts.gender` o derivado del id; por defecto las mujeres usan
+  pelo largo y falda al estar de pie, los hombres pelo corto y pantalón.
 - Burbujas: puntos (thinking), monitor (coding), terminal (running_tool), taza
   (idle), diálogo (talking), `!` (error).
 - Personajes: `CharacterLook.parts` (pelo, ropa, piel, accesorio) y la galería se
@@ -271,8 +272,10 @@ Los agentes externos son efímeros: se pierden al reiniciar el servidor.
 - **Pausas**: `idle` con mesa sale según hash; ajustar `firstBreakDelay`,
   `nextBreakDelay`, `breakDuration` o `maxBreakers` en `occupancy.ts`.
 - **Tema**: ampliar `SCENE_PALETTES` y el tipo `ThemeName` en `office/sprites.ts`.
-- **Personaje**: ampliar `CharacterParts`/`LOOK_PRESETS` y su dibujo en
-  `drawChibiSeated`/`drawChibiStanding`.
+- **Personaje**: ampliar `CharacterParts`/`LOOK_PRESETS` (incluido `gender`) y su
+  dibujo en `drawChibiSeated`/`drawChibiStanding`.
+- **Zoom/pan**: `zoomRef`, `panRef` y `baseViewRef` en `OfficeCanvas.tsx`; los
+  botones **AJUSTAR** y **LLENAR** viven en el mismo componente.
 
 ## 11. Límites conocidos
 
