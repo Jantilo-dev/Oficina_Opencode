@@ -90,10 +90,24 @@ npm start
 - While an agent is working, **SESIÓN** shows an animated activity line
   (**Pensando…**, **Revisando archivos…**, **Editando archivos…**,
   **Ejecutando comando…**) and the scene bubble/status updates immediately.
-- Right panel with two tabs: **EQUIPO** (sessions, agent, status, details) and
-  **SESIÓN** (chat with the selected session). The scene and team panel show the
-  root sessions plus subagents that are active (busy, retry, error or waiting for
-  permission); historical subagents stay hidden.
+- When a worker goes from busy to idle, an alert appears with the person, cargo and
+  group; click it to open that chat. Errors are shown as red alerts.
+- Right panel with three tabs: **EQUIPO** (sessions, agent, status, details),
+  **GRUPO** (custom group name, people and roles) and **SESIÓN** (chat with the selected
+  session). The office draws only root sessions; active subagents and `live:` external
+  agents remain in EQUIPO but do not take office desks or alter the five-person group.
+- **INDEP: SÍ/NO** in the header shows or hides independent programmers (root sessions
+  that are not part of a complete team). The choice is saved and also hides their desks
+  and `live:` rows.
+- If the last message asks a question, SESIÓN shows a **PENDIENTE** card. If it lists
+  `OPCIONES: A) ... B) ...`, each option is a button; free text remains available.
+  Replying clears the pending card. When a team uses OpenCode Go, its subagents inherit
+  the Go model assigned to their parent role.
+- In **GRUPO**, first see the list of complete groups; click a group to open its people
+  and roles, and use **← GRUPOS** to go back. There you can name the work group and each
+  person. The group name is shown on the office sign, and the person name is used on the
+  nameplate and roster. Cargo comes from the role (Jefe, Frontend, Backend, QA,
+  Documentación).
 - In **EQUIPO**, select a session and choose its **puesto** (desk). **AUTO** lets the
   office pick one; assigned desks are saved in `localStorage`. **PAUSAS** in the
   header turns idle breaks on or off so characters can stay at their desks.
@@ -102,7 +116,8 @@ npm start
   Chat with the jefe and press **PASAR PLAN** in **SESIÓN**: the last assistant plan
   is sent to the other four sessions of that area. The jefe resolves the user’s
   questions and must finish each reply with **LISTO PARA PASAR AL EQUIPO: SÍ** or
-  **LISTO PARA PASAR AL EQUIPO: NO**; the chat shows that state before sending. When
+  **LISTO PARA PASAR AL EQUIPO: NO**; the button stays disabled until the latest reply
+  says **SÍ** and there is no pending question. When
   the four roles finish, the jefe posts **“El pedido ya está hecho, favor revisar para
   seguir con lo demás.”**. When the five roles are complete,
   the team is pinned to that office: seats are locked and its members do not leave for
@@ -185,15 +200,19 @@ corridors). The choice is saved in `localStorage`; `?theme=rubi` or
 In the **SESIÓN** tab press the pencil (✎) next to the title:
 
 - **Nombre del personaje**: shown on the nameplate, the zone sign and the list.
-- **Diseño personalizado**: hair style (short/long/twin/spiky), accessory
-  (glasses/headband/cape/star), hair/shirt colours and skin tone, with a live preview.
+- **Diseño personalizado**: all procedural characters use a **cat face** automatically.
+  Fur style (short/long/twin/spiky), accessory (glasses/headband/cape/star), fur/shirt
+  colours and muzzle tone are editable, with a live preview.
   The preview and the office use the same `characterSprite.ts` renderer. Seated
-  characters look down toward the monitor; the desk and chair hide their lower body.
-  Hands rest on the keyboard and mouse, and those only animate while coding/running.
+  characters look down toward the monitor and sit low behind the desk with a low-back
+  chair; the desk hides their torso and their legs/shoes show under it. Hands rest on
+  the keyboard and mouse, with typing and mouse movement animated. Their legs are drawn
+  behind the desk so they stay below the tabletop.
 - **Galería**: nine original archetypes (Original, Ninja, Idol, Científico, Héroe,
   Samurái, Maga, Piloto, Gótico). They are rendered as presets in the scene.
 - **Imagen propia**: PNG/JPG/WEBP/GIF/SVG up to 256 KB. Image avatars can be data,
-  blob or local paths; remote URLs are ignored by the scene.
+  blob or local paths; remote URLs are ignored by the scene. Uploaded images keep their
+  own face instead of the generated cat face.
 - Everything is stored in `localStorage` per session and removed when you delete it.
 
 The project ships **no copyrighted characters** (no JJK, Pokémon, Miku, etc.). The

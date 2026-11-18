@@ -76,6 +76,7 @@ web/
     api.ts                   fetchBootstrap, sesiones, prompts, mensajes
     useAgentSync.ts          Hook SSE para agentes externos (batching por rAF)
     types.ts, format.ts, characters.ts
+    chatQuestions.ts        Preguntas/opciones del chat y pendiente más reciente
     characterSprite.ts      Sprite pixel-art compartido por escena y vista previa
     teamRoles.ts            Responsabilidades y handoff predefinidos por rol
     index.css, chat.css      Tema de la UI
@@ -85,7 +86,7 @@ web/
       navigation.ts          Rejilla A*, muros/muebles y puertas transitables
       OfficeCanvas.tsx       Asignación, movimiento, zoom/pan, hit-test
       AgentPanel.tsx         Panel retro de detalle por agente
-    components/              NewSessionModal, TeamModal, ModelSelect, SessionChat, CharacterModal
+    components/              NewSessionModal, TeamModal, ModelSelect, SessionChat, CharacterModal, GroupPanel
     layout/LayoutEditor.tsx  Editor rompecabezas: piezas, muros/puertas, pan/zoom, JSON
     office/                  Implementación anterior (mantener tipos/preview)
 scripts/
@@ -233,13 +234,17 @@ curl.exe -X POST http://127.0.0.1:5174/api/agents/report `
 - Pantallas y LEDs se encienden mientras el puesto está ocupado (agente sentado)
   y se apagan cuando se levanta o el puesto queda vacío; apagadas quedan oscuras
   con LED rojo.
-- Manos en teclado y ratón; teclas y ratón animados solo al `coding`/`running_tool`,
-  nunca en idle. Los agentes sentados se dibujan de frente con la mirada baja hacia el
-  monitor, con `seatX + 12` para quedar centrados en el teclado; brazos y manos se
-  dibujan después del escritorio, para que alcancen teclado/ratón. El cuerpo se dibuja
-  antes de los cubículos para que el escritorio oculte la parte inferior.
+- Manos en teclado y ratón; los agentes sentados animan tecleo y movimiento de mouse.
+  Se dibujan de frente con la mirada baja hacia el monitor, con `seatX + 12` y
+  `seatY + 8`; el cuerpo baja otros 8 px dentro de la silla, que se mantiene en su
+  altura. Brazos y manos se dibujan después del escritorio; piernas y zapatos antes de
+  los cubículos, para que la mesa las oculte parcialmente y queden debajo. El cuerpo se
+  dibuja antes de los cubículos para que el escritorio oculte la parte inferior.
+- Todos los personajes procedurales usan automáticamente **cara de gato**; el cuerpo,
+  ropa y extremidades no cambian. `hair`/`hairColor` se usan como pelaje y `skin` como
+  hocico. Las imágenes subidas conservan su propia cara.
 - Género: `CharacterParts.gender` o derivado del id; por defecto las mujeres usan
-  pelo largo y falda al estar de pie, los hombres pelo corto y pantalón.
+  falda al estar de pie, los hombres pantalón; el pelaje conserva el estilo elegido.
 - Burbujas: puntos (thinking), monitor (coding), terminal (running_tool), taza
   (idle), diálogo (talking), `!` (error).
 - `SessionChat` muestra una línea animada mientras el agente trabaja:
@@ -350,9 +355,27 @@ Los agentes externos son efímeros: se pierden al reiniciar el servidor.
 - **Equipo**: usar **CREAR EQUIPO**; `TeamModal` elige método y modelo por rol y
   `createTeam` solo lanza el prompt del jefe. El método/modelo de una sesión también
   se puede cambiar en el detalle de **EQUIPO**.
+- **Grupo**: la pestaña **GRUPO** (`GroupPanel`) muestra primero la lista de grupos;
+  al pulsar uno se abre su equipo y **← GRUPOS** vuelve a la lista. Permite nombrar el
+  grupo y a cada persona; el nombre del grupo se dibuja en el cartel del área y el de
+  la persona en su nameplate. `pixel-office-group-names` guarda los nombres.
+- **Alertas**: `App.tsx` compara el estado anterior con el actual; una transición
+  busy/retry → idle crea una alerta con persona, cargo y grupo.
+- **Preguntas**: `chatQuestions.ts` detecta `PREGUNTA:`/`OPCIONES:` o una pregunta
+  simple en el último mensaje. `SessionChat` muestra una tarjeta **PENDIENTE** con
+  botones de opción; el texto libre sigue disponible. El pendiente desaparece al
+  responder o al llegar otro mensaje.
+- **Oficina**: `officeSessions` solo incluye sesiones raíz; los subagentes y los
+  agentes `live:` externos siguen en EQUIPO pero no se dibujan en la oficina.
+- **INDEP**: el botón `INDEP: SÍ/NO` oculta las sesiones raíz que no pertenecen a un
+  equipo completo, además de los agentes `live:` y sus puestos; se guarda en
+  `pixel-office-show-independent`.
+- **Modelos**: los subagentes de un equipo heredan el modelo Go de su rol padre
+  (o de otro rol Go del equipo); si el equipo no usa Go, se usa el fallback Go Flash.
 - **Traspaso**: asignar jefe/Frontend/Backend/QA/Documentación en un área y pulsar
   **PASAR PLAN** desde el chat del jefe; `runHandoff` en `App.tsx` envía el último
-  texto del asistente a las otras cuatro sesiones.
+  texto del asistente a las otras cuatro sesiones. El botón requiere
+  `LISTO PARA PASAR AL EQUIPO: SÍ` del último mensaje y que no haya pregunta pendiente.
 - **Personaje**: ampliar `CharacterParts`/`LOOK_PRESETS` (incluido `gender`) y su
   dibujo en `drawChibiSeated`/`drawChibiStanding`.
 - **Zoom/pan**: `zoomRef`, `panRef` y `baseViewRef` en `OfficeCanvas.tsx`; los

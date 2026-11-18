@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, Session } from "../types";
 import { displayTitle } from "../format";
 import ErrorBox, { isBillingError, isRegionError } from "./ErrorBox";
+import { pendingQuestionFor } from "../chatQuestions";
 
 type Props = {
   session: Session | null;
@@ -14,6 +15,7 @@ type Props = {
   agent?: string;
   model?: string;
   name?: string;
+  role?: string;
   onEdit?: () => void;
   handoff?: { disabled: boolean; hint?: string; ready?: boolean | null; onRun: () => Promise<void> };
   onSend: (text: string) => Promise<void>;
@@ -32,6 +34,7 @@ export default function SessionChat({
   agent,
   model,
   name,
+  role,
   onEdit,
   handoff,
   onSend,
@@ -45,6 +48,11 @@ export default function SessionChat({
   const [handoffBusy, setHandoffBusy] = useState(false);
   const [handoffInfo, setHandoffInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dismissedQuestion, setDismissedQuestion] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDismissedQuestion(null);
+  }, [session?.id]);
 
   useEffect(() => {
     const element = listRef.current;
@@ -62,9 +70,13 @@ export default function SessionChat({
     );
   }
 
-  const submit = async () => {
-    const value = text.trim();
+  const parsedPending = pendingQuestionFor(messages);
+  const pending = parsedPending && parsedPending.messageId !== dismissedQuestion ? parsedPending : null;
+
+  const sendValue = async (raw: string) => {
+    const value = raw.trim();
     if (!value || busy || sending) return;
+    if (pending) setDismissedQuestion(pending.messageId);
     setSending(true);
     setError(null);
     try {
@@ -77,16 +89,12 @@ export default function SessionChat({
     }
   };
 
+  const submit = async () => {
+    await sendValue(text);
+  };
+
   const runHandoff = async () => {
     if (!handoff || handoff.disabled || handoffBusy) return;
-    if (
-      handoff.ready === false &&
-      !window.confirm(
-        "El jefe indicó que aún no está listo: faltan aclaraciones. ¿Enviar el plan al equipo igualmente?"
-      )
-    ) {
-      return;
-    }
     setHandoffBusy(true);
     setHandoffInfo(null);
     setError(null);
@@ -144,6 +152,7 @@ export default function SessionChat({
           <span className={`badge ${busy ? "busy" : "idle"}`}>
             estado {busy ? busyLabel || "trabajando" : "idle"}
           </span>
+          {pending && !busy && !sending ? <span className="badge busy">PREGUNTA PENDIENTE</span> : null}
         </div>
       </div>
 
@@ -183,6 +192,31 @@ export default function SessionChat({
             ) : null}
           </div>
         ))}
+        {pending && !busy && !sending && (
+          <div className="pending-question" role="status" aria-live="polite">
+            <div className="pending-head">
+              <span className="badge busy">PENDIENTE</span>
+              <span>{name ?? pending.agent ?? agent ?? "AGENTE"}{role ? ` · ${role}` : ""}</span>
+            </div>
+            <div className="pending-text">{pending.question}</div>
+            {pending.options.length > 0 ? (
+              <div className="pending-options">
+                {pending.options.map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    className="pending-option"
+                    onClick={() => void sendValue(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="pending-help">Responde en el cuadro de abajo.</div>
+            )}
+          </div>
+        )}
         {(busy || sending) && (
           <div className="chat-activity" role="status" aria-live="polite">
             <span className="activity-dots" aria-hidden="true">

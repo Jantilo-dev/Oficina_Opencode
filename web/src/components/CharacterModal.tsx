@@ -113,7 +113,7 @@ export default function CharacterModal({ title, current, onSave, onClose }: Prop
             <div className="parts-controls">
               <div className="parts-grid">
                 <label>
-                  Peinado
+                  Pelaje
                   <select
                     value={parts?.hair ?? "short"}
                     onChange={(event) => changeParts({ hair: event.target.value as HairStyle })}
@@ -141,7 +141,7 @@ export default function CharacterModal({ title, current, onSave, onClose }: Prop
               </div>
               <div className="colors-row">
                 <label>
-                  Pelo
+                  Color de pelaje
                   <input
                     type="color"
                     value={parts?.hairColor ?? DEFAULT_PARTS.hairColor}

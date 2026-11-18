@@ -35,16 +35,21 @@ import TeamModal from "./components/TeamModal";
 import ModelSelect from "./components/ModelSelect";
 import ErrorBox, { isRegionError } from "./components/ErrorBox";
 import SessionChat from "./components/SessionChat";
+import GroupPanel from "./components/GroupPanel";
 import CharacterModal from "./components/CharacterModal";
 import LayoutEditor from "./layout/LayoutEditor";
 import { type CharacterLook, loadCharacters, saveCharacters } from "./characters";
 import { displayTitle } from "./format";
+import { pendingQuestionFor } from "./chatQuestions";
 import { ROLE_BY_ID, TEAM_ROLE_DEFS, TEAM_ROLE_METHODS, JEFE_DONE_TEXT, readJefeReadiness } from "./teamRoles";
 
 const MANAGER_AGENTS = ["plan", "build"] as const;
 
 const JEFE_PROMPT_REMINDER =
   "\n\n[ROL JEFE] No respondas que estás en modo plan ni en solo lectura. Resuelve la duda o pregunta del usuario y, si falta información, pídela. Termina siempre con una línea exacta: LISTO PARA PASAR AL EQUIPO: SÍ o LISTO PARA PASAR AL EQUIPO: NO. No implementes código.";
+
+const QUESTION_PROMPT_REMINDER =
+  "\n\n[PREGUNTAS] Si necesitas una decisión del usuario, termina con este formato:\nPREGUNTA: ...\nOPCIONES:\nA) ...\nB) ...\nSi no hay alternativas, escribe solo PREGUNTA: ...";
 
 const THEMES: Array<{ id: ThemeName; label: string }> = [
   { id: "fuego", label: "FUEGO" },
@@ -137,6 +142,32 @@ function loadIntended(): IntendedMap {
     return {};
   }
 }
+type GroupNames = Record<string, string>;
+
+const GROUP_NAMES_KEY = "pixel-office-group-names";
+
+function loadGroupNames(): GroupNames {
+  try {
+    const raw = window.localStorage.getItem(GROUP_NAMES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const result: GroupNames = {};
+    for (const [area, value] of Object.entries(parsed)) {
+      if (typeof value === "string") result[area] = value;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+type WorkerAlert = {
+  id: string;
+  sessionId: string;
+  text: string;
+  kind: "done" | "error";
+};
+
 function parseModelKey(value: string): { providerID: string; modelID: string } | undefined {
   if (!value) return undefined;
   const [providerID, modelID] = value.split("::");
@@ -216,7 +247,13 @@ export default function App() {
   const [seatAssignments, setSeatAssignments] = useState<SeatAssignments>(loadSeatAssignments);
   const [seatByAgent, setSeatByAgent] = useState<Record<string, number>>({});
   const [spawned, setSpawned] = useState<Record<string, number>>({});
-  const [tab, setTab] = useState<"team" | "chat">("team");
+  const [groupNames, setGroupNames] = useState<GroupNames>(loadGroupNames);
+  const [workerAlerts, setWorkerAlerts] = useState<WorkerAlert[]>([]);
+  const [showIndependent, setShowIndependent] = useState(
+    () => window.localStorage.getItem("pixel-office-show-independent") !== "off"
+  );
+  const [tab, setTab] = useState<"team" | "group" | "chat">("team");
+  const [groupView, setGroupView] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [teamModalOpen, setTeamModalOpen] = useState(false);
   const [layoutOpen, setLayoutOpen] = useState(false);
@@ -235,6 +272,7 @@ export default function App() {
   const dirRef = useRef<string | null>(null);
   const sessionDirsRef = useRef<Map<string, string>>(new Map());
   const loadingRef = useRef<Set<string>>(new Set());
+  const previousStatusesRef = useRef<Record<string, SessionStatus>>({});
 
   bootFailedRef.current = bootFailed;
 
@@ -255,9 +293,32 @@ export default function App() {
     });
   };
 
+  const toggleIndependent = () => {
+    setShowIndependent((current) => {
+      const next = !current;
+      window.localStorage.setItem("pixel-office-show-independent", next ? "on" : "off");
+      return next;
+    });
+  };
+
   const retryBootstrap = () => {
     setBootFailed(false);
     setBootTick((current) => current + 1);
+  };
+
+  useEffect(() => {
+    window.localStorage.setItem(GROUP_NAMES_KEY, JSON.stringify(groupNames));
+  }, [groupNames]);
+
+  const renameGroup = (area: string, name: string) => {
+    setGroupNames((prev) => ({ ...prev, [area]: name }));
+  };
+
+  const renamePerson = (id: string, name: string) => {
+    setCharacters((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], name: name.trim() ? name : undefined }
+    }));
   };
 
   const assignManager = (id: string | null) => {
@@ -761,24 +822,64 @@ export default function App() {
       subagents
     };
   }, [allSessions]);
+  const teamRootIds = useMemo(
+    () => new Set(detectedTeams.teams.flatMap((team) => [...team.roles.values()])),
+    [detectedTeams]
+  );
   useEffect(() => {
     if (detectedTeams.subagents.length === 0) return;
-    const go = models.find(
+    const fallback = models.find(
       (model) => model.providerID === "opencode-go" && model.modelID === "deepseek-v4.1-flash"
     );
-    if (!go) return;
+    const resolveGo = (id: string): ModelInfo | undefined => {
+      const direct = intended[id]?.model;
+      if (direct?.providerID === "opencode-go") return direct;
+      const provider = meta[id]?.provider;
+      const modelId = meta[id]?.model;
+      if (provider !== "opencode-go" || !modelId) return undefined;
+      return (
+        models.find((model) => model.providerID === provider && model.modelID === modelId) ?? {
+          providerID: provider,
+          providerName: "OpenCode Go",
+          modelID: modelId,
+          label: modelId
+        }
+      );
+    };
     setIntended((prev) => {
       let changed = false;
       const next = { ...prev };
       for (const id of detectedTeams.subagents) {
+        const team = detectedTeams.bySession.get(id);
+        if (!team) continue;
+        const roleIds = new Set(team.roles.values());
+        let chosen: ModelInfo | undefined;
+        let cursor = sessions[id]?.parentID;
+        const seen = new Set<string>();
+        while (cursor && !seen.has(cursor)) {
+          seen.add(cursor);
+          if (roleIds.has(cursor)) {
+            chosen = resolveGo(cursor);
+            if (chosen) break;
+          }
+          cursor = sessions[cursor]?.parentID;
+        }
+        if (!chosen) {
+          for (const roleId of roleIds) {
+            chosen = resolveGo(roleId);
+            if (chosen) break;
+          }
+        }
+        chosen ??= fallback;
+        if (!chosen) continue;
         const current = prev[id]?.model;
-        if (current?.providerID === go.providerID && current.modelID === go.modelID) continue;
-        next[id] = { ...prev[id], model: { ...go } };
+        if (current?.providerID === chosen.providerID && current.modelID === chosen.modelID) continue;
+        next[id] = { ...prev[id], model: { ...chosen } };
         changed = true;
       }
       return changed ? next : prev;
     });
-  }, [detectedTeams, models]);
+  }, [detectedTeams, models, sessions, meta, intended]);
   useEffect(() => {
     if (!handoffCycle) return;
     const ids = new Set(handoffCycle.targets);
@@ -822,14 +923,24 @@ export default function App() {
     Boolean(errors[id]);
   const visibleSessions = useMemo(
     () =>
-      allSessions.filter(
-        (session) =>
+      allSessions.filter((session) => {
+        const independent = !session.parentID && !teamRootIds.has(session.id);
+        if (independent && !showIndependent) return false;
+        return (
           !session.parentID ||
           !sessions[session.parentID] ||
           session.id === selected ||
           sessionActive(session.id)
+        );
+      }),
+    [allSessions, sessions, selected, statuses, permissions, errors, showIndependent, teamRootIds]
+  );
+  const officeSessions = useMemo(
+    () =>
+      visibleSessions.filter(
+        (session) => !session.parentID && (showIndependent || teamRootIds.has(session.id))
       ),
-    [allSessions, sessions, selected, statuses, permissions, errors]
+    [visibleSessions, showIndependent, teamRootIds]
   );
   const busyCount =
     allSessions.filter((s) => statuses[s.id]?.type === "busy" || permissions[s.id]).length +
@@ -865,16 +976,16 @@ export default function App() {
   const chatBusyLabel = !selectedBusy
     ? ""
     : selectedPermission
-      ? "Esperando permiso…"
+      ? "Esperando permiso⬦"
       : selectedStatus?.type === "retry"
-        ? "Reintentando…"
+        ? "Reintentando⬦"
         : ["edit", "write", "patch", "multiedit"].includes(selectedActivity?.tool ?? "")
-          ? "Editando archivos…"
+          ? "Editando archivos⬦"
           : ["bash", "shell"].includes(selectedActivity?.tool ?? "")
-            ? "Ejecutando comando…"
+            ? "Ejecutando comando⬦"
             : ["read", "grep", "glob", "list", "webfetch"].includes(selectedActivity?.tool ?? "")
-              ? "Revisando archivos…"
-              : "Pensando…";
+              ? "Revisando archivos⬦"
+              : "Pensando⬦";
   const chatAgent = selectedIntended?.agent ?? selectedMeta?.agent;
   const canAssignManager = Boolean(
     selectedSession &&
@@ -965,6 +1076,10 @@ export default function App() {
     });
   }, [detectedTeams, seatByAgent]);
   const selectedTeam = selected ? detectedTeams.bySession.get(selected) : undefined;
+  const selectedRole = selectedTeam
+    ? [...selectedTeam.roles.entries()].find(([, id]) => id === selected)?.[0]
+    : undefined;
+  const selectedRoleLabel = selectedRole ? ROLE_BY_ID.get(selectedRole)?.title : undefined;
   const isTeamJefe = Boolean(selected && selectedTeam?.roles.get("plan") === selected);
   const selectedPinned = selectedKey ? teamPinnedAgents.has(selectedKey) : false;
   const selectedSeatOption = currentSeat !== undefined ? SEAT_OPTIONS[currentSeat] : undefined;
@@ -972,6 +1087,7 @@ export default function App() {
   const planText = selected ? lastAssistantText(transcripts[selected] ?? []) : "";
   const latestJefeText = selected ? latestAssistantText(transcripts[selected] ?? []) : "";
   const jefeReady = isJefeSelected ? readJefeReadiness(latestJefeText) : null;
+  const jefePending = isJefeSelected && selected ? pendingQuestionFor(transcripts[selected] ?? []) : null;
   const handoffTargets = useMemo(() => {
     if (selectedTeam) {
       return TEAM_ROLE_DEFS.filter((definition) => definition.role !== "plan").flatMap(
@@ -1108,19 +1224,64 @@ export default function App() {
     setTab("chat");
   };
 
+  const openGroup = (area: string) => {
+    const team = detectedTeams.teams.find((item) => item.area === area);
+    const jefe = team?.roles.get("plan");
+    if (jefe) setSelected(jefe);
+    setGroupView(area);
+    setTab("group");
+  };
+
+  const dismissAlert = (id: string) => {
+    setWorkerAlerts((current) => current.filter((item) => item.id !== id));
+  };
+
   const nameFor = (session: Session) => characters[session.id]?.name?.trim() || displayTitle(session.title);
 
-  const sceneAgents = useMemo<SceneAgent[]>(() => {
-    const list: SceneAgent[] = liveAgents.map((agent) => ({
-      id: `live:${agent.agentId}`,
-      name: agent.name,
-      status: agent.status,
-      task: agent.currentTask,
-      file: agent.file,
-      logs: agent.logs.map((log) => log.message)
-    }));
+  useEffect(() => {
+    const previous = previousStatusesRef.current;
+    const next: Record<string, SessionStatus> = {};
+    const additions: WorkerAlert[] = [];
+    const now = Date.now();
 
-    for (const session of visibleSessions) {
+    for (const [id, status] of Object.entries(statuses)) {
+      next[id] = status;
+      const before = previous[id];
+      if (!before) continue;
+      const wasWorking = before.type === "busy" || before.type === "retry";
+      if (!wasWorking || status.type !== "idle") continue;
+      const session = sessions[id];
+      if (!session) continue;
+      const team = detectedTeams.bySession.get(id);
+      const roleEntry = team ? [...team.roles.entries()].find(([, sessionId]) => sessionId === id) : undefined;
+      const role = roleEntry ? ROLE_BY_ID.get(roleEntry[0])?.title : undefined;
+      const group = team ? groupNames[team.area]?.trim() : undefined;
+      const error = errors[id];
+      const person = characters[id]?.name?.trim() || (team ? "Sin nombre" : displayTitle(session.title));
+      additions.push({
+        id: `worker-${id}-${now}`,
+        sessionId: id,
+        text: `${person}${role ? ` · ${role}` : ""}${group ? ` · ${group}` : ""} ${
+          error ? "terminó con error" : "terminó su tarea"
+        }.`,
+        kind: error ? "error" : "done"
+      });
+    }
+
+    previousStatusesRef.current = next;
+    if (additions.length === 0) return;
+    setWorkerAlerts((current) => [...current, ...additions].slice(-5));
+    for (const alert of additions) {
+      window.setTimeout(() => {
+        setWorkerAlerts((current) => current.filter((item) => item.id !== alert.id));
+      }, 9000);
+    }
+  }, [statuses, sessions, errors, detectedTeams, groupNames, characters]);
+
+  const sceneAgents = useMemo<SceneAgent[]>(() => {
+    const list: SceneAgent[] = [];
+
+    for (const session of officeSessions) {
       const st = statuses[session.id];
       const act = activity[session.id];
       const err = errors[session.id];
@@ -1156,13 +1317,13 @@ export default function App() {
     }
 
     return list;
-  }, [liveAgents, visibleSessions, statuses, activity, errors, permissions, transcripts, characters, meta, spawned, managerId]);
+  }, [officeSessions, statuses, activity, errors, permissions, transcripts, characters, meta, spawned, managerId]);
 
   useEffect(() => {
     setExternalSelected((current) =>
-      current && !sceneAgents.some((agent) => agent.id === current.id) ? null : current
+      current && !liveAgents.some((agent) => `live:${agent.agentId}` === current.id) ? null : current
     );
-  }, [sceneAgents]);
+  }, [liveAgents]);
 
   const createAgentSession = async (input: {
     agent: string;
@@ -1197,7 +1358,7 @@ export default function App() {
     starts: definition.role === "plan",
     text:
       definition.role === "plan"
-        ? "Eres el Jefe de Planificación del área. No respondas que estás en modo plan (solo lectura) ni expliques limitaciones de permisos. Tu trabajo es resolver todas las dudas y preguntas del usuario, cerrar el alcance, los criterios de aceptación y dividir el trabajo por rol: Frontend (UI, botones, estilos), Backend (lógica, API, datos), QA (pruebas, aceptación) y Documentación (docs y Scrum). Antes de repartir, confirma que no quedan dudas. En cada respuesta termina con una línea exacta: LISTO PARA PASAR AL EQUIPO: SÍ o LISTO PARA PASAR AL EQUIPO: NO. Usa NO mientras falte algo; usa SÍ solo cuando el plan esté cerrado. No implementes código."
+        ? `Eres el Jefe de Planificación del área. No respondas que estás en modo plan (solo lectura) ni expliques limitaciones de permisos. Tu trabajo es resolver todas las dudas y preguntas del usuario, cerrar el alcance, los criterios de aceptación y dividir el trabajo por rol: Frontend (UI, botones, estilos), Backend (lógica, API, datos), QA (pruebas, aceptación) y Documentación (docs y Scrum). Antes de repartir, confirma que no quedan dudas. En cada respuesta termina con una línea exacta: LISTO PARA PASAR AL EQUIPO: SÍ o LISTO PARA PASAR AL EQUIPO: NO. Usa NO mientras falte algo; usa SÍ solo cuando el plan esté cerrado. No implementes código.${QUESTION_PROMPT_REMINDER}`
         : definition.brief
   }));
 
@@ -1303,7 +1464,7 @@ export default function App() {
     });
     try {
       await promptSession(id, {
-        text: `${text}${isJefeSelected ? JEFE_PROMPT_REMINDER : ""}`,
+        text: `${text}${isJefeSelected ? JEFE_PROMPT_REMINDER : ""}${QUESTION_PROMPT_REMINDER}`,
         agent: chatAgent,
         model: selectedIntended?.model
           ? { providerID: selectedIntended.model.providerID, modelID: selectedIntended.model.modelID }
@@ -1332,7 +1493,7 @@ export default function App() {
         const role = definition
           ? `${definition.title}: ${definition.handoff}`
           : "Trabaja solo en tu especialidad.";
-        const text = `El jefe de ${area} ha cerrado el plan.\n\nTu rol: ${role}\n\nNo cambies de especialidad ni hagas el trabajo de otro rol.\n\nPLAN:\n${plan}`;
+        const text = `El jefe de ${area} ha cerrado el plan.\n\nTu rol: ${role}\n\nNo cambies de especialidad ni hagas el trabajo de otro rol.\n\nPLAN:\n${plan}${QUESTION_PROMPT_REMINDER}`;
         return promptSession(target.sessionId, {
           text,
           agent,
@@ -1383,19 +1544,25 @@ export default function App() {
   const handoff =
     (isTeamJefe || selectedSeatOption?.role === "plan") && handoffArea
       ? {
-          disabled: !planText || handoffTargets.length < 4,
+          disabled:
+            !planText ||
+            handoffTargets.length < 4 ||
+            jefeReady !== true ||
+            Boolean(jefePending),
           ready: jefeReady,
           hint: !planText
             ? "Primero cierra un plan con el jefe en el chat."
             : handoffTargets.length < 4
               ? "Asigna Frontend, Backend, QA y Documentación en esta área."
-              : handoffBusyTargets.length > 0
-                ? `${handoffBusyLabel} está ocupado; el plan se enviará igualmente y puede quedar en cola.`
-                : jefeReady === null
-                  ? "Pide al jefe el estado: LISTO PARA PASAR AL EQUIPO: SÍ/NO."
-                  : jefeReady === false
-                    ? "El jefe indicó que aún NO está listo; resuelve las dudas pendientes."
-                    : `Enviar el plan a Frontend, Backend, QA y Documentación de ${handoffArea}.`,
+              : jefePending
+                ? "Responde la pregunta pendiente del jefe antes de pasar el plan."
+                : handoffBusyTargets.length > 0
+                  ? `${handoffBusyLabel} está ocupado; el plan se enviará igualmente y puede quedar en cola.`
+                  : jefeReady === null
+                    ? "El jefe debe confirmar: LISTO PARA PASAR AL EQUIPO: SÍ."
+                    : jefeReady === false
+                      ? "El jefe indicó que aún NO está listo; resuelve las dudas pendientes."
+                      : `Enviar el plan a Frontend, Backend, QA y Documentación de ${handoffArea}.`,
           onRun: runHandoff
         }
       : undefined;
@@ -1419,7 +1586,7 @@ export default function App() {
         <span className="sub">opencode · {boot?.directory ?? "sin directorio"}</span>
         <span className="spacer" />
         <button type="button" className="pill accent-btn" onClick={() => setModalOpen(true)}>
-          + NUEVA SESIÓN
+          + NUEVA SESI�N
         </button>
         <button type="button" className="pill theme-btn" onClick={() => setTeamModalOpen(true)}>
           CREAR EQUIPO
@@ -1432,6 +1599,14 @@ export default function App() {
         </button>
         <button type="button" className="pill theme-btn" onClick={toggleBreaks}>
           PAUSAS: {breaksEnabled ? "SÍ" : "NO"}
+        </button>
+        <button
+          type="button"
+          className="pill theme-btn"
+          onClick={toggleIndependent}
+          title="Mostrar u ocultar programadores individuales"
+        >
+          INDEP: {showIndependent ? "SÍ" : "NO"}
         </button>
         <span className="pill">
           <span className={`dot ${linkClass}`} />
@@ -1466,12 +1641,42 @@ export default function App() {
         </div>
       )}
 
+      {workerAlerts.length > 0 && (
+        <div className="alerts" role="status" aria-live="polite">
+          {workerAlerts.map((alert) => (
+            <div
+              key={alert.id}
+              className={`alert ${alert.kind}`}
+              onClick={() => {
+                setSelected(alert.sessionId);
+                setTab("chat");
+                dismissAlert(alert.id);
+              }}
+            >
+              <span className="alert-text">{alert.text}</span>
+              <button
+                type="button"
+                className="alert-close"
+                aria-label="Cerrar alerta"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  dismissAlert(alert.id);
+                }}
+              >
+                �
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="main">
         <div className="office">
           <SceneCanvas
             agents={sceneAgents}
             theme={theme}
             breaksEnabled={breaksEnabled}
+            groupNames={groupNames}
             seatAssignments={seatAssignments}
             onSeatsChange={setSeatByAgent}
             pinnedAgents={teamPinnedAgents}
@@ -1498,14 +1703,14 @@ export default function App() {
                 </>
               ) : !boot ? (
                 <>
-                  <h2>Conectando…</h2>
+                  <h2>Conectando⬦</h2>
                   <div>Cargando sesiones de opencode.</div>
                 </>
               ) : (
                 <>
                   <h2>La oficina está vacía</h2>
                   <div>
-                    Pulsa <code>+ NUEVA SESIÓN</code> o reporta agentes con <code>/api/agents/report</code>
+                    Pulsa <code>+ NUEVA SESI�N</code> o reporta agentes con <code>/api/agents/report</code>
                   </div>
                 </>
               )}
@@ -1520,18 +1725,28 @@ export default function App() {
             </button>
             <button
               type="button"
+              className={`tab ${tab === "group" ? "on" : ""}`}
+              onClick={() => {
+                setGroupView(null);
+                setTab("group");
+              }}
+            >
+              GRUPO
+            </button>
+            <button
+              type="button"
               className={`tab ${tab === "chat" ? "on" : ""}`}
               onClick={() => setTab("chat")}
               disabled={!selected}
             >
-              SESIÓN
+              SESI�N
             </button>
           </div>
 
           {tab === "team" ? (
             <>
               <div className="list">
-                {liveAgents.map((agent) => {
+                {showIndependent && liveAgents.map((agent) => {
                   const id = `live:${agent.agentId}`;
                   const chip =
                     agent.status === "idle"
@@ -1565,7 +1780,7 @@ export default function App() {
                     >
                       <span className={`chip ${kind}`} />
                       <span className="name">
-                        {session.parentID ? "â†³ " : ""}
+                        {session.parentID ? "â⬠³ " : ""}
                         {nameFor(session)}
                       </span>
                       <span className="tag">{agentName ?? (session.parentID ? "sub" : "root")}</span>
@@ -1583,7 +1798,7 @@ export default function App() {
                     <span>id</span>
                     <b>{shortId(selectedSession.id)}</b>
                     <span>padre</span>
-                    <b>{selectedSession.parentID ? shortId(selectedSession.parentID) : "—"}</b>
+                    <b>{selectedSession.parentID ? shortId(selectedSession.parentID) : "�"}</b>
                     <span>estado</span>
                     <b>{selectedStatus?.type ?? "idle"}</b>
                     <span>método</span>
@@ -1612,7 +1827,7 @@ export default function App() {
                       }}
                     />
                     <span>tokens</span>
-                    <b>{selectedMeta?.tokens ?? "—"}</b>
+                    <b>{selectedMeta?.tokens ?? "�"}</b>
                     <span>directorio</span>
                     <b>{selectedSession.directory}</b>
                     <span>manager</span>
@@ -1696,10 +1911,28 @@ export default function App() {
                   Haz clic en un personaje o en una fila para ver el detalle.
                   <br />
                   <br />
-                  Usa <b>+ NUEVA SESIÓN</b> para crear un agente y darle instrucciones.
+                  Usa <b>+ NUEVA SESI�N</b> para crear un agente y darle instrucciones.
                 </div>
               )}
             </>
+          ) : tab === "group" ? (
+            <GroupPanel
+              teams={detectedTeams.teams}
+              activeArea={groupView ?? undefined}
+              groupNames={groupNames}
+              sessions={sessions}
+              statuses={statuses}
+              errors={errors}
+              personName={(id) => characters[id]?.name?.trim() ?? ""}
+              onRename={renameGroup}
+              onRenamePerson={renamePerson}
+              onOpen={openGroup}
+              onBack={() => setGroupView(null)}
+              onSelect={(id) => {
+                setSelected(id);
+                setTab("chat");
+              }}
+            />
           ) : (
             <SessionChat
               session={selectedSession}
@@ -1712,6 +1945,7 @@ export default function App() {
               agent={chatAgent}
               model={chatModel}
               name={selectedSession ? nameFor(selectedSession) : undefined}
+              role={selectedRoleLabel}
               onEdit={() => selected && setEditingCharacter(selected)}
               handoff={handoff}
               onSend={sendPrompt}

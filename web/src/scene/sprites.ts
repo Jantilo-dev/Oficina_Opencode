@@ -1,5 +1,5 @@
 import { DEFAULT_PARTS, type CharacterLook, type CharacterParts } from "../characters";
-import { drawPerson, drawDeskArms } from "../characterSprite";
+import { drawPerson, drawDeskArms, drawSeatedLegs } from "../characterSprite";
 import type { ThemeName } from "../office/sprites";
 
 export type SceneStatus = "idle" | "thinking" | "coding" | "running_tool" | "talking" | "error";
@@ -47,6 +47,8 @@ export const AREAS = [
   { id: "oficina6", label: "OFICINA 6", x: 1150, y: 1720, w: 420, h: 230 }
 ] as const;
 
+const GROUP_AREA_IDS = new Set(["intranet", "logistica", "soporte", "portal"]);
+
 export const CUBICLES: Cubicle[] = [
   { x: 50, y: 210, w: 160, h: 168, seatX: 108, seatY: 334 },
   { x: 216, y: 210, w: 160, h: 168, seatX: 274, seatY: 334 },
@@ -92,19 +94,20 @@ export const ENTRANCE = { x: 1548, y: 820 };
 export const RECEPTION_DESK = { x: 1420, y: 825, w: 120, h: 50, seatX: 1480, seatY: 812 };
 
 const SEAT_X_OFFSET = 12;
+const SEAT_Y_OFFSET = 8;
 
 export const WORKSTATIONS: Workstation[] = [
   ...CUBICLES.map((cubicle) => ({
     kind: "cubicle" as const,
     cubicle,
     seatX: cubicle.seatX + SEAT_X_OFFSET,
-    seatY: cubicle.seatY
+    seatY: cubicle.seatY + SEAT_Y_OFFSET
   })),
   ...CUBICLES2.map((cubicle) => ({
     kind: "cubicle" as const,
     cubicle,
     seatX: cubicle.seatX + SEAT_X_OFFSET,
-    seatY: cubicle.seatY
+    seatY: cubicle.seatY + SEAT_Y_OFFSET
   }))
 ];
 
@@ -1045,7 +1048,7 @@ function drawBubble(ctx: Ctx, agent: AgentView, t: number) {
 
 function drawNameplate(ctx: Ctx, agent: AgentView, selected: boolean) {
   ctx.font = "bold 10px ui-monospace, Consolas, monospace";
-  const label = agent.name.length > 22 ? `${agent.name.slice(0, 21)}…` : agent.name;
+  const label = agent.name.length > 22 ? `${agent.name.slice(0, 21)}⬦` : agent.name;
   const width = ctx.measureText(label).width + 18;
   const y = agent.y - 58;
   rect(ctx, agent.x - width / 2 - 2, y - 14, width + 4, 20, selected ? "#f2c24a" : "#252c36");
@@ -1061,7 +1064,7 @@ type Box = { x: number; y: number; w: number; h: number };
 
 function nameplateBox(ctx: Ctx, agent: AgentView): Box {
   ctx.font = "bold 10px ui-monospace, Consolas, monospace";
-  const label = agent.name.length > 22 ? `${agent.name.slice(0, 21)}…` : agent.name;
+  const label = agent.name.length > 22 ? `${agent.name.slice(0, 21)}⬦` : agent.name;
   const width = ctx.measureText(label).width + 18;
   return { x: agent.x - width / 2 - 2, y: agent.y - 72, w: width + 4, h: 20 };
 }
@@ -1080,7 +1083,8 @@ export function drawScene(
   screenStates: boolean[] = [],
   activeStates: boolean[] = [],
   hoverId: string | null = null,
-  theme: ThemeName = "fuego"
+  theme: ThemeName = "fuego",
+  groupNames: Record<string, string> = {}
 ) {
   applyTheme(theme);
   ctx.imageSmoothingEnabled = false;
@@ -1100,12 +1104,15 @@ export function drawScene(
   drawEntrance(ctx);
   drawReception(ctx);
   for (const area of AREAS) {
-    drawAreaLabel(ctx, area.x + area.w / 2, area.y + 22, area.label);
+    const label = GROUP_AREA_IDS.has(area.id)
+      ? groupNames[area.label]?.trim() || "SIN NOMBRE"
+      : area.label;
+    drawAreaLabel(ctx, area.x + area.w / 2, area.y + 22, label);
   }
 
   const receptionist: AgentView = {
     id: "reception",
-    name: "RECEPCIÓN",
+    name: "RECEPCI�N",
     status: "idle",
     logs: [],
     x: RECEPTION_DESK.seatX,
@@ -1140,6 +1147,7 @@ export function drawScene(
       status: agent.status,
       time: t
     });
+    drawSeatedLegs(ctx, { x: agent.x, y: agent.y, colors: agent.colors });
   }
 
   for (let i = 0; i < WORKSTATIONS.length; i++) {
@@ -1149,10 +1157,11 @@ export function drawScene(
     if (!agent.seated) continue;
     drawDeskArms(ctx, {
       x: agent.x,
-      y: agent.y,
+      y: agent.id === "reception" ? agent.y : agent.y + 8,
+      handY: agent.id === "reception" ? agent.y : agent.y - SEAT_Y_OFFSET,
       colors: agent.colors,
       parts: partsFor(agent.look),
-      active: agent.status === "coding" || agent.status === "running_tool",
+      active: true,
       time: t
     });
   }

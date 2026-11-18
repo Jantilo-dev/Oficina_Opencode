@@ -85,76 +85,86 @@ type HeadOptions = {
 
 function drawHead(ctx: CanvasRenderingContext2D, x: number, options: HeadOptions) {
   const { top, style, hair, hairDark, skin, skinDark, accessory, lookDown, lookRight, blink, thinking } = options;
+  const fur = hair;
+  const furLight = shade(hair, 1.18);
+  const furDark = hairDark;
 
   if (style === "long") {
-    rect(ctx, x - 12, top + 4, 3, 18, hairDark);
-    rect(ctx, x + 10, top + 4, 3, 18, hairDark);
-    rect(ctx, x - 11, top + 5, 2, 15, hair);
-    rect(ctx, x + 10, top + 5, 2, 15, hair);
+    rect(ctx, x - 12, top + 5, 3, 16, hairDark);
+    rect(ctx, x + 10, top + 5, 3, 16, hairDark);
+    rect(ctx, x - 11, top + 6, 2, 13, fur);
+    rect(ctx, x + 10, top + 6, 2, 13, fur);
   } else if (style === "twin") {
-    rect(ctx, x - 14, top + 9, 4, 12, hairDark);
-    rect(ctx, x + 11, top + 9, 4, 12, hairDark);
-    rect(ctx, x - 13, top + 8, 2, 3, hair);
-    rect(ctx, x + 12, top + 8, 2, 3, hair);
+    rect(ctx, x - 14, top + 8, 4, 11, hairDark);
+    rect(ctx, x + 11, top + 8, 4, 11, hairDark);
+  } else if (style === "spiky") {
+    rect(ctx, x - 10, top + 2, 3, 5, furDark);
+    rect(ctx, x + 7, top + 2, 3, 5, furDark);
   }
 
-  if (style === "spiky") {
-    rect(ctx, x - 8, top - 3, 4, 4, hair);
-    rect(ctx, x - 2, top - 4, 4, 5, hair);
-    rect(ctx, x + 4, top - 3, 4, 4, hair);
-    rect(ctx, x + 9, top - 1, 3, 3, hair);
-  }
+  rect(ctx, x - 10, top - 3, 5, 4, OUTLINE);
+  rect(ctx, x - 9, top - 4, 3, 1, OUTLINE);
+  rect(ctx, x - 8, top - 5, 1, 1, OUTLINE);
+  rect(ctx, x - 9, top - 3, 3, 2, fur);
+  rect(ctx, x - 8, top - 4, 1, 1, fur);
+  rect(ctx, x - 8, top - 1, 1, 2, "#d77b8f");
+  rect(ctx, x + 5, top - 3, 5, 4, OUTLINE);
+  rect(ctx, x + 6, top - 4, 3, 1, OUTLINE);
+  rect(ctx, x + 7, top - 5, 1, 1, OUTLINE);
+  rect(ctx, x + 6, top - 3, 3, 2, fur);
+  rect(ctx, x + 7, top - 4, 1, 1, fur);
+  rect(ctx, x + 7, top - 1, 1, 2, "#d77b8f");
 
   rect(ctx, x - 10, top, 20, 21, OUTLINE);
-  rect(ctx, x - 9, top + 1, 18, 19, hairDark);
-  rect(ctx, x - 8, top + 3, 16, 17, skin);
-  rect(ctx, x - 11, top + 9, 2, 4, skinDark);
-  rect(ctx, x + 9, top + 9, 2, 4, skinDark);
-  rect(ctx, x - 3, top + 20, 6, 3, skinDark);
+  rect(ctx, x - 9, top + 1, 18, 19, fur);
+  rect(ctx, x - 9, top + 1, 2, 17, hairDark);
+  rect(ctx, x + 7, top + 1, 2, 17, hairDark);
+  rect(ctx, x - 8, top + 1, 14, 3, furLight);
+  rect(ctx, x - 8, top + 3, 2, 3, hairDark);
+  rect(ctx, x + 7, top + 3, 2, 3, hairDark);
 
-  rect(ctx, x - 9, top, 18, 5, hair);
-  rect(ctx, x - 9, top + 4, 3, 9, hair);
-  rect(ctx, x + 6, top + 4, 3, 9, hair);
-  rect(ctx, x - 7, top + 4, 14, 3, hair);
-  rect(ctx, x - 8, top + 1, 12, 2, shade(hair, 1.18));
-  rect(ctx, x - 1, top + 4, 2, 2, hairDark);
+  rect(ctx, x - 5, top + 12, 10, 7, skin);
+  rect(ctx, x - 4, top + 11, 8, 2, skin);
+  rect(ctx, x - 6, top + 14, 2, 3, skinDark);
+  rect(ctx, x + 5, top + 14, 2, 3, skinDark);
+  rect(ctx, x - 4, top + 17, 8, 2, skinDark);
 
-  if (style === "long") {
-    rect(ctx, x - 8, top + 6, 2, 12, hair);
-    rect(ctx, x + 6, top + 6, 2, 12, hair);
-  } else if (style === "twin") {
-    rect(ctx, x - 12, top + 10, 2, 8, hair);
-    rect(ctx, x + 10, top + 10, 2, 8, hair);
-  }
-
-  const eyeY = top + 10 + (lookDown ? 1 : 0);
+  const eyeY = top + 9 + (lookDown ? 1 : 0);
+  const pupilX = (thinking ? 1 : 0) + (lookRight ? 1 : 0);
   if (!blink) {
-    rect(ctx, x - 6, eyeY, 3, 2, WHITE);
-    rect(ctx, x + 3, eyeY, 3, 2, WHITE);
-    const pupilX = (thinking ? 1 : 0) + (lookRight ? 1 : 0);
-    rect(ctx, x - 5 + pupilX, eyeY, 1, 2, OUTLINE);
-    rect(ctx, x + 4 + pupilX, eyeY, 1, 2, OUTLINE);
+    rect(ctx, x - 6, eyeY, 3, 3, "#f2d24a");
+    rect(ctx, x + 3, eyeY, 3, 3, "#f2d24a");
+    rect(ctx, x - 5 + pupilX, eyeY, 1, 3, OUTLINE);
+    rect(ctx, x + 4 + pupilX, eyeY, 1, 3, OUTLINE);
+    rect(ctx, x - 6, eyeY, 1, 1, WHITE);
+    rect(ctx, x + 3, eyeY, 1, 1, WHITE);
   } else {
     rect(ctx, x - 6, eyeY + 1, 3, 1, OUTLINE);
     rect(ctx, x + 3, eyeY + 1, 3, 1, OUTLINE);
   }
   rect(ctx, x - 6, eyeY - 2, 3, 1, hairDark);
   rect(ctx, x + 3, eyeY - 2, 3, 1, hairDark);
-  rect(ctx, x - 1, eyeY + 2, 2, 2, skinDark);
-  rect(ctx, x - 1, eyeY + 5, 3, 1, SKIN_LIP);
-  rect(ctx, x + 2, eyeY + 4, 1, 1, SKIN_LIP);
-  rect(ctx, x + 3, top + 16, 2, 1, skinDark);
+
+  rect(ctx, x - 1, top + 13, 3, 2, "#d77b8f");
+  rect(ctx, x - 1, top + 15, 3, 1, OUTLINE);
+  rect(ctx, x - 2, top + 16, 1, 2, skinDark);
+  rect(ctx, x + 2, top + 16, 1, 2, skinDark);
+
+  rect(ctx, x - 13, top + 14, 4, 1, "#f4e8cc");
+  rect(ctx, x - 12, top + 17, 3, 1, "#f4e8cc");
+  rect(ctx, x + 9, top + 14, 4, 1, "#f4e8cc");
+  rect(ctx, x + 9, top + 17, 3, 1, "#f4e8cc");
 
   if (accessory === "glasses") {
-    rect(ctx, x - 7, eyeY - 1, 5, 4, OUTLINE);
-    rect(ctx, x + 2, eyeY - 1, 5, 4, OUTLINE);
-    rect(ctx, x - 6, eyeY, 3, 2, "#a8d6e8");
-    rect(ctx, x + 3, eyeY, 3, 2, "#a8d6e8");
+    rect(ctx, x - 7, eyeY - 1, 5, 5, OUTLINE);
+    rect(ctx, x + 2, eyeY - 1, 5, 5, OUTLINE);
+    rect(ctx, x - 6, eyeY, 3, 3, "#a8d6e8");
+    rect(ctx, x + 3, eyeY, 3, 3, "#a8d6e8");
     rect(ctx, x - 2, eyeY + 1, 4, 1, OUTLINE);
   }
   if (accessory === "headband") {
-    rect(ctx, x - 10, top + 6, 20, 2, "#c0392b");
-    rect(ctx, x + 8, top + 8, 3, 5, "#c0392b");
+    rect(ctx, x - 10, top + 5, 20, 2, "#c0392b");
+    rect(ctx, x + 8, top + 7, 3, 5, "#c0392b");
   }
 }
 
@@ -169,9 +179,11 @@ function drawTorso(
   pose: "stand" | "sit",
   swing: number,
   status: string | undefined,
-  accessory: CharacterParts["accessory"] | undefined
+  accessory: CharacterParts["accessory"] | undefined,
+  seatTop?: number
 ) {
   const seated = pose === "sit";
+  const chairTop = seatTop ?? top;
   const typing = status === "coding" || status === "running_tool";
   const thinking = status === "thinking";
   const handLift = thinking ? -3 : 0;
@@ -181,17 +193,16 @@ function drawTorso(
     rect(ctx, x + 7, top + 2, 4, 17, "#a52d2d");
   }
   if (seated) {
-    rect(ctx, x - 15, top - 12, 4, 42, "#3a4658");
-    rect(ctx, x + 11, top - 12, 4, 42, "#3a4658");
-    rect(ctx, x - 15, top - 12, 30, 4, "#586a7f");
-    rect(ctx, x - 11, top - 16, 22, 4, "#4b586b");
-    rect(ctx, x - 12, top + 18, 24, 5, "#2b323c");
+    rect(ctx, x - 15, chairTop - 8, 4, 38, "#3a4658");
+    rect(ctx, x + 11, chairTop - 8, 4, 38, "#3a4658");
+    rect(ctx, x - 15, chairTop - 8, 30, 3, "#586a7f");
+    rect(ctx, x - 12, chairTop + 18, 24, 5, "#2b323c");
   }
 
   rect(ctx, x - 10, top, 20, 19, OUTLINE);
   rect(ctx, x - 8, top + 2, 16, 16, shirt);
-  rect(ctx, x - 8, top + 2, 3, 16, shirtDark);
-  rect(ctx, x + 5, top + 2, 3, 16, shade(shirt, 1.12));
+  rect(ctx, x - 8, top + 2, 1, 16, shirtDark);
+  rect(ctx, x - 8, top + 2, 3, 3, shirtDark);
   rect(ctx, x - 2, top + 2, 4, 11, WHITE);
   rect(ctx, x - 3, top + 2, 6, 2, WHITE);
   rect(ctx, x - 1, top + 13, 2, 3, shirtDark);
@@ -359,37 +370,72 @@ export type DeskArmsOptions = {
   y: number;
   colors: SpriteColors;
   parts?: CharacterParts;
+  handY?: number;
   active?: boolean;
   time?: number;
 };
 
 export function drawDeskArms(ctx: CanvasRenderingContext2D, options: DeskArmsOptions) {
-  const { x, y, colors, parts, active = false, time = 0 } = options;
+  const { x, y, colors, parts, handY, active = false, time = 0 } = options;
   const skin = parts?.skin ?? colors.skin ?? "#e8b98f";
   const shirt = parts?.shirt ?? colors.shirt ?? "#2e7d5b";
   const shirtDark = parts?.shirt ? shade(parts.shirt, 0.72) : colors.shirtDark ?? "#1f5a40";
   const baseY = Math.round(y);
+  const deskY = Math.round(handY ?? y);
   const jitter = active ? Math.round(Math.sin(time / 120 + x) * 1) : 0;
   const mouseShift = active ? Math.round(Math.sin(time / 220 + x) * 2) : 0;
 
-  rect(ctx, x - 10, baseY - 26, 3, 8, shirt);
-  rect(ctx, x - 9, baseY - 19, 3, 4, shirtDark);
-  rect(ctx, x - 9, baseY - 7, 6, 3, shirtDark);
-  rect(ctx, x - 3, baseY - 7, 3, 3, skin);
-  rect(ctx, x - 4, baseY - 4, 4, 4, skin);
-  rect(ctx, x - 3, baseY - 1, 4, 4, skin);
+  rect(ctx, x - 10, baseY - 24, 3, 8, shirt);
+  rect(ctx, x - 9, deskY - 5, 6, 3, shirtDark);
+  rect(ctx, x - 4, deskY - 4, 3, 3, skin);
+  rect(ctx, x - 5, deskY - 1, 4, 4, skin);
 
-  rect(ctx, x + 8, baseY - 26, 3, 8, shirt);
-  rect(ctx, x + 9, baseY - 19, 3, 4, shirtDark);
-  rect(ctx, x + 11, baseY - 7, 8, 3, shirtDark);
-  rect(ctx, x + 19, baseY - 7, 5, 3, skin);
-  rect(ctx, x + 22, baseY - 4, 4, 4, skin);
-  rect(ctx, x + 23 + mouseShift, baseY - 1, 5, 4, skin);
+  rect(ctx, x + 8, baseY - 24, 3, 8, shirt);
+  rect(ctx, x + 10, deskY - 5, 10, 3, shirtDark);
+  rect(ctx, x + 19, deskY - 4, 4, 3, skin);
+  rect(ctx, x + 22 + mouseShift, deskY + 1, 5, 4, skin);
 
   if (active) {
-    rect(ctx, x - 3 + jitter, baseY - 1, 2, 1, WHITE);
-    rect(ctx, x + 25 + mouseShift, baseY - 1, 2, 1, WHITE);
+    rect(ctx, x - 3 + jitter, deskY, 2, 1, WHITE);
+    rect(ctx, x + 24 + mouseShift, deskY + 1, 2, 1, WHITE);
   }
+}
+
+export function drawSeatedLegs(
+  ctx: CanvasRenderingContext2D,
+  options: { x: number; y: number; colors: SpriteColors }
+) {
+  const { x, y, colors } = options;
+  const pants = colors.pants ?? "#2f3a4d";
+  const kneeY = Math.round(y + 19);
+  const shoeY = Math.round(y + 31);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x - 10, y + 10, 20, 26);
+  ctx.clip();
+  ctx.strokeStyle = pants;
+  ctx.lineWidth = 5;
+  ctx.lineCap = "butt";
+  ctx.lineJoin = "miter";
+
+  ctx.beginPath();
+  ctx.moveTo(x - 4, y + 12);
+  ctx.lineTo(x - 9, kneeY);
+  ctx.lineTo(x - 9, shoeY);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x + 4, y + 12);
+  ctx.lineTo(x + 9, kneeY);
+  ctx.lineTo(x + 9, shoeY);
+  ctx.stroke();
+
+  rect(ctx, x - 10, shoeY, 7, 4, SHOE);
+  rect(ctx, x + 2, shoeY, 7, 4, SHOE);
+  rect(ctx, x - 8, shoeY - 2, 3, 2, shade(pants, 0.82));
+  rect(ctx, x + 4, shoeY - 2, 3, 2, shade(pants, 0.82));
+  ctx.restore();
 }
 
 export function drawPerson(ctx: CanvasRenderingContext2D, options: SpriteOptions) {
@@ -407,8 +453,9 @@ export function drawPerson(ctx: CanvasRenderingContext2D, options: SpriteOptions
   const swing = walking ? Math.round(Math.sin(phase) * 2) : 0;
   const bob = walking ? Math.abs(Math.sin(phase)) : 0;
   const baseY = Math.round(y - bob);
-  const headTop = baseY - (seated ? 46 : 52);
-  const torsoTop = baseY - (seated ? 28 : 31);
+  const bodyY = seated ? baseY + 8 : baseY;
+  const headTop = bodyY - (seated ? 46 : 52);
+  const torsoTop = bodyY - (seated ? 28 : 31);
 
   rect(ctx, x - 13, baseY + 1, 26, 4, "#00000024");
   if (look?.avatar && isImageAvatar(look.avatar) && drawAvatar(ctx, look.avatar, x - 15, headTop - 2, 30, seated ? 48 : 52)) {
@@ -417,7 +464,20 @@ export function drawPerson(ctx: CanvasRenderingContext2D, options: SpriteOptions
   }
 
   if (!seated) drawLegs(ctx, x, baseY, colors, skin, gender, swing, walking);
-  drawTorso(ctx, x, torsoTop, colors, shirt, shirtDark, skin, pose, swing, status, parts?.accessory);
+  drawTorso(
+    ctx,
+    x,
+    torsoTop,
+    colors,
+    shirt,
+    shirtDark,
+    skin,
+    pose,
+    swing,
+    status,
+    parts?.accessory,
+    seated ? baseY - 28 : undefined
+  );
   drawHead(ctx, x, {
     top: headTop,
     style,

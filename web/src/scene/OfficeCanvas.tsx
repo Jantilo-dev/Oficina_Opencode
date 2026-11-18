@@ -39,6 +39,7 @@ type Props = {
   onSelect: (id: string) => void;
   theme: ThemeName;
   breaksEnabled?: boolean;
+  groupNames?: Record<string, string>;
   seatAssignments?: Record<string, number>;
   onSeatsChange?: (seats: Record<string, number>) => void;
   pinnedAgents?: Set<string>;
@@ -55,6 +56,7 @@ export default function OfficeCanvas({
   onSelect,
   theme,
   breaksEnabled,
+  groupNames = {},
   seatAssignments = {},
   onSeatsChange,
   pinnedAgents
@@ -501,7 +503,7 @@ export default function OfficeCanvas({
         const seat = state?.placement.seat;
         if (seat !== null && seat !== undefined) {
           screens[seat] = true;
-          if (view.status === "coding" || view.status === "running_tool") active[seat] = true;
+          active[seat] = true;
         }
       }
       viewsRef.current = views;
@@ -537,13 +539,25 @@ export default function OfficeCanvas({
 
       ctx.translate(offsetX, offsetY);
       ctx.scale(sx, sy);
-      drawScene(ctx, layout.width, layout.height, views, now, selectedRef.current, screens, active, hoverRef.current, theme);
+      drawScene(
+        ctx,
+        layout.width,
+        layout.height,
+        views,
+        now,
+        selectedRef.current,
+        screens,
+        active,
+        hoverRef.current,
+        theme,
+        groupNames
+      );
       frame = requestAnimationFrame(loop);
     };
 
     frame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frame);
-  }, [size, layout, mode, theme]);
+  }, [size, layout, mode, theme, groupNames]);
 
   const pick = (clientX: number, clientY: number): string | null => {
     const canvas = canvasRef.current;
