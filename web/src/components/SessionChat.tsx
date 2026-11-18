@@ -133,10 +133,16 @@ export default function SessionChat({
           ) : null}
         </div>
         <div className="chat-meta">
-          <span className="badge">{agent ?? "agente —"}</span>
+          <span className="badge muted" title={session.id}>
+            id {session.id.slice(0, 8)}
+          </span>
+          <span className="badge muted" title={session.parentID ?? "sin padre"}>
+            padre {session.parentID ? session.parentID.slice(0, 8) : "—"}
+          </span>
+          <span className="badge">{agent ?? "agente ?"}</span>
           <span className="badge muted">{model ?? "modelo del agente"}</span>
           <span className={`badge ${busy ? "busy" : "idle"}`}>
-            {busy ? busyLabel || "trabajando" : "idle"}
+            estado {busy ? busyLabel || "trabajando" : "idle"}
           </span>
         </div>
       </div>

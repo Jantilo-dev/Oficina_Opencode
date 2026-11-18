@@ -13,7 +13,7 @@ import {
   type CharacterParts,
   type HairStyle
 } from "../characters";
-import { drawCharacterPreview } from "../office/sprites";
+import { drawCharacterPreview } from "../scene/sprites";
 
 type Props = {
   title: string;

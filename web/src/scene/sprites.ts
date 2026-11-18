@@ -1,4 +1,5 @@
 import { DEFAULT_PARTS, type CharacterLook, type CharacterParts } from "../characters";
+import { drawPerson, drawDeskArms } from "../characterSprite";
 import type { ThemeName } from "../office/sprites";
 
 export type SceneStatus = "idle" | "thinking" | "coding" | "running_tool" | "talking" | "error";
@@ -90,17 +91,19 @@ export const ENTRANCE = { x: 1548, y: 820 };
 
 export const RECEPTION_DESK = { x: 1420, y: 825, w: 120, h: 50, seatX: 1480, seatY: 812 };
 
+const SEAT_X_OFFSET = 12;
+
 export const WORKSTATIONS: Workstation[] = [
   ...CUBICLES.map((cubicle) => ({
     kind: "cubicle" as const,
     cubicle,
-    seatX: cubicle.seatX,
+    seatX: cubicle.seatX + SEAT_X_OFFSET,
     seatY: cubicle.seatY
   })),
   ...CUBICLES2.map((cubicle) => ({
     kind: "cubicle" as const,
     cubicle,
-    seatX: cubicle.seatX,
+    seatX: cubicle.seatX + SEAT_X_OFFSET,
     seatY: cubicle.seatY
   }))
 ];
@@ -131,7 +134,7 @@ export function agentColors(id: string): AgentColors {
     shirt: `hsl(${hue} 52% 55%)`,
     shirtDark: `hsl(${hue} 52% 40%)`,
     hair: ["#2b2118", "#4a2f1d", "#1b1b24", "#6b4a1e", "#3a2a3a"][hash % 5],
-    skin: SKINS[(hash >> 3) % SKINS.length],
+    skin: SKINS[(hash >>> 3) % SKINS.length],
     pants: ["#2f3a4d", "#3c3f4a", "#4a3b2f", "#2b3b34"][hash % 4]
   };
 }
@@ -703,7 +706,7 @@ function drawEntrance(ctx: Ctx) {
   rect(ctx, 1540, y + 63, 30, 3, "#4f7fbd");
 }
 
-function drawCubicle(ctx: Ctx, cubicle: Cubicle, index: number, screenOn: boolean, t: number) {
+function drawCubicle(ctx: Ctx, cubicle: Cubicle, index: number, screenOn: boolean, active: boolean, t: number) {
   const { x, y, w, h } = cubicle;
   rect(ctx, x + 6, y + h - 2, w - 12, 10, "#1f3f7533");
 
@@ -741,7 +744,7 @@ function drawCubicle(ctx: Ctx, cubicle: Cubicle, index: number, screenOn: boolea
   const laptopX = compact ? x + 8 : x + 22;
   const keyboardX = compact ? x + 38 : x + 52;
   const mouseBase = compact ? x + 82 : x + 96;
-  drawLaptop(ctx, laptopX, deskTop, screenOn, t);
+  drawLaptop(ctx, laptopX, deskTop, screenOn, active, t);
   if (!compact) drawSideMonitor(ctx, x + w - 54, deskTop, screenOn, t);
 
   rect(ctx, keyboardX, deskTop + 2, 36, 8, "#232a33");
@@ -751,14 +754,14 @@ function drawCubicle(ctx: Ctx, cubicle: Cubicle, index: number, screenOn: boolea
       rect(ctx, keyboardX + 3 + col * 3, deskTop + 4 + row * 2, 2, 1, "#8a94a2");
     }
   }
-  if (screenOn) {
+  if (active) {
     const key = Math.floor((t / 120 + index * 3) % 10);
     const key2 = (key + 4) % 10;
     rect(ctx, keyboardX + 3 + key * 3, deskTop + 4, 2, 1, "#f2d24a");
     rect(ctx, keyboardX + 3 + key2 * 3, deskTop + 6, 2, 1, "#83c8dc");
   }
   rect(ctx, keyboardX + 2, deskTop + 10, 30, 2, "#1b2028");
-  const mouseX = mouseBase + (screenOn ? Math.sin(t / 220 + index) * 2 : 0);
+  const mouseX = mouseBase + (active ? Math.sin(t / 220 + index) * 2 : 0);
   ctx.fillStyle = "#1b2028";
   ctx.beginPath();
   ctx.ellipse(mouseX, deskTop + 7, 5, 3, 0, 0, Math.PI * 2);
@@ -772,22 +775,13 @@ function drawCubicle(ctx: Ctx, cubicle: Cubicle, index: number, screenOn: boolea
     rect(ctx, mouseX - 1, deskTop + 5, 2, 1, "#8fd0f0");
     rect(ctx, keyboardX, deskTop + 2, 36, 1, "#7fd0e855");
   }
-
-  const chair = ["#c0392b", "#3f8f57", "#2f5f95", "#d08a2e"][index % 4];
-  rect(ctx, x + 30, deskTop - 36, 10, 36, chair);
-  rect(ctx, x + 30, deskTop - 36, 10, 3, "#ffffff33");
-  rect(ctx, x + 37, deskTop - 33, 3, 30, "#00000022");
-  rect(ctx, x + 28, deskTop - 2, 36, 7, "#3a414d");
-  rect(ctx, x + 28, deskTop - 2, 36, 2, "#586270");
-  rect(ctx, x + 30, deskTop + 5, 5, 13, "#2b323c");
-  rect(ctx, x + 56, deskTop + 5, 5, 13, "#2b323c");
 }
 
-function drawLaptop(ctx: Ctx, x: number, deskTop: number, screenOn: boolean, t: number) {
+function drawLaptop(ctx: Ctx, x: number, deskTop: number, screenOn: boolean, active: boolean, t: number) {
   rect(ctx, x, deskTop + 2, 26, 7, "#343c48");
   rect(ctx, x + 2, deskTop + 3, 22, 2, "#4a5462");
   for (let i = 0; i < 4; i++) {
-    rect(ctx, x + 3 + i * 5, deskTop + 6, 3, 1, screenOn && i === Math.floor(t / 200) % 4 ? "#f2d24a" : "#8f97a3");
+    rect(ctx, x + 3 + i * 5, deskTop + 6, 3, 1, active && i === Math.floor(t / 200) % 4 ? "#f2d24a" : "#8f97a3");
   }
   rect(ctx, x + 2, deskTop - 14, 22, 14, screenOn ? "#c9d8e0" : "#a8b2bc");
   rect(ctx, x + 2, deskTop - 14, 22, 2, "#e4e8ee");
@@ -1084,6 +1078,7 @@ export function drawScene(
   t: number,
   selectedId: string | null,
   screenStates: boolean[] = [],
+  activeStates: boolean[] = [],
   hoverId: string | null = null,
   theme: ThemeName = "fuego"
 ) {
@@ -1106,9 +1101,6 @@ export function drawScene(
   drawReception(ctx);
   for (const area of AREAS) {
     drawAreaLabel(ctx, area.x + area.w / 2, area.y + 22, area.label);
-  }
-  for (let i = 0; i < WORKSTATIONS.length; i++) {
-    drawCubicle(ctx, WORKSTATIONS[i].cubicle, i, screenStates[i] ?? false, t);
   }
 
   const receptionist: AgentView = {
@@ -1133,13 +1125,58 @@ export function drawScene(
     }
   };
   const sorted = [...agents, receptionist].sort((a, b) => a.y - b.y);
+
+  for (const agent of sorted) {
+    if (!agent.seated || agent.id === "reception") continue;
+    drawPerson(ctx, {
+      x: agent.x,
+      y: agent.y,
+      colors: agent.colors,
+      parts: partsFor(agent.look),
+      look: agent.look,
+      gender: genderOf(agent.id, agent.look),
+      pose: "sit",
+      facing: 1,
+      status: agent.status,
+      time: t
+    });
+  }
+
+  for (let i = 0; i < WORKSTATIONS.length; i++) {
+    drawCubicle(ctx, WORKSTATIONS[i].cubicle, i, screenStates[i] ?? false, activeStates[i] ?? false, t);
+  }
+  for (const agent of sorted) {
+    if (!agent.seated) continue;
+    drawDeskArms(ctx, {
+      x: agent.x,
+      y: agent.y,
+      colors: agent.colors,
+      parts: partsFor(agent.look),
+      active: agent.status === "coding" || agent.status === "running_tool",
+      time: t
+    });
+  }
+
   const priority: AgentView[] = [];
   const labels: AgentView[] = [];
   for (const agent of sorted) {
     if (agent.id === selectedId || agent.id === hoverId) priority.push(agent);
     else labels.push(agent);
-    if (agent.seated) drawChibiSeated(ctx, agent, t);
-    else drawChibiStanding(ctx, agent, t, agent.walking);
+    if (!agent.seated || agent.id === "reception") {
+      drawPerson(ctx, {
+        x: agent.x,
+        y: agent.y,
+        colors: agent.colors,
+        parts: partsFor(agent.look),
+        look: agent.look,
+        gender: genderOf(agent.id, agent.look),
+        pose: agent.seated ? "sit" : "stand",
+        facing: 1,
+        status: agent.status,
+        walking: agent.walking,
+        time: t
+      });
+    }
     if (agent.id !== "reception" && agent.status !== "talking") drawBubble(ctx, agent, t);
   }
 
@@ -1169,4 +1206,32 @@ export function drawScene(
       }
     }
   }
+}
+
+export function drawCharacterPreview(canvas: HTMLCanvasElement, parts?: CharacterParts, look?: string) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const dpr = window.devicePixelRatio || 1;
+  const scale = 1.8;
+  const width = 84;
+  const height = 112;
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+  ctx.clearRect(0, 0, width / scale, height / scale);
+  ctx.imageSmoothingEnabled = false;
+  const lookValue: CharacterLook | undefined = look ? { avatar: look } : undefined;
+  drawPerson(ctx, {
+    x: width / scale / 2,
+    y: height / scale - 10,
+    colors: agentColors("preview"),
+    parts: parts ?? (lookValue ? partsFor(lookValue) : undefined),
+    look: lookValue,
+    gender: genderOf("preview", lookValue),
+    pose: "stand",
+    status: "idle",
+    time: performance.now()
+  });
 }

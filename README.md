@@ -130,7 +130,9 @@ npm start
   time; the new values apply to later prompts and to **PASAR PLAN**.
 - The session appears on the floor (it walks in) and opens in **SESIÓN**, with
   streaming text, tool chips, tokens/cost, an input to keep talking, **Abortar**
-  while it works and **Eliminar** (also removes its subagents).
+  while it works and **Eliminar** (also removes its subagents). The chat header keeps
+  the title, `id`, `padre` and `estado` fixed while messages scroll; it changes only
+  when you select another chat.
 - Several sessions run in parallel, each with its own context and desk.
 
 ## Office editor
@@ -185,7 +187,9 @@ In the **SESIÓN** tab press the pencil (✎) next to the title:
 - **Nombre del personaje**: shown on the nameplate, the zone sign and the list.
 - **Diseño personalizado**: hair style (short/long/twin/spiky), accessory
   (glasses/headband/cape/star), hair/shirt colours and skin tone, with a live preview.
-  The same parts are drawn on the character in the office.
+  The preview and the office use the same `characterSprite.ts` renderer. Seated
+  characters look down toward the monitor; the desk and chair hide their lower body.
+  Hands rest on the keyboard and mouse, and those only animate while coding/running.
 - **Galería**: nine original archetypes (Original, Ninja, Idol, Científico, Héroe,
   Samurái, Maga, Piloto, Gótico). They are rendered as presets in the scene.
 - **Imagen propia**: PNG/JPG/WEBP/GIF/SVG up to 256 KB. Image avatars can be data,

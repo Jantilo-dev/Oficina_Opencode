@@ -135,12 +135,12 @@ export function colorFor(id: string): {
     jacket: `hsl(${hue} 40% 36%)`,
     tie: ["#8c2f2f", "#2f5f88", "#c98a1e", "#2f6f5a"][hash % 4],
     hair: ["#3a2a1a", "#5b3520", "#1f1a16", "#6e4a1e", "#2a2a3a"][hash % 5],
-    hairStyle: (["short", "long", "spiky", "twin"] as HairStyle[])[(hash >> 5) % 4],
+    hairStyle: (["short", "long", "spiky", "twin"] as HairStyle[])[(hash >>> 5) % 4],
     accent: `hsl(${hue} 70% 62%)`,
-    skin: SKINS[(hash >> 3) % SKINS.length],
+    skin: SKINS[(hash >>> 3) % SKINS.length],
     skirt: hash % 2 === 0,
-    bun: (hash >> 2) % 3 === 0,
-    glasses: (hash >> 4) % 3 === 0
+    bun: (hash >>> 2) % 3 === 0,
+    glasses: (hash >>> 4) % 3 === 0
   };
 }
 

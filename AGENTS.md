@@ -76,6 +76,7 @@ web/
     api.ts                   fetchBootstrap, sesiones, prompts, mensajes
     useAgentSync.ts          Hook SSE para agentes externos (batching por rAF)
     types.ts, format.ts, characters.ts
+    characterSprite.ts      Sprite pixel-art compartido por escena y vista previa
     teamRoles.ts            Responsabilidades y handoff predefinidos por rol
     index.css, chat.css      Tema de la UI
     scene/
@@ -94,9 +95,10 @@ scripts/
 docs/preview.png             Captura usada por el README
 ```
 
-Nota: `web/src/office/sprites.ts` sigue usándose para `ThemeName` y la vista
-previa de personajes; `web/src/office/OfficeCanvas.tsx` y `office/layout.ts` son
-código anterior no importado por la app actual.
+Nota: `web/src/office/sprites.ts` solo se conserva por `ThemeName`; la vista previa de
+personajes usa `scene/sprites.ts` + `characterSprite.ts`, igual que la escena.
+`web/src/office/OfficeCanvas.tsx` y `office/layout.ts` son código anterior no importado
+por la app actual.
 
 ## 4. Flujo de datos
 
@@ -231,8 +233,11 @@ curl.exe -X POST http://127.0.0.1:5174/api/agents/report `
 - Pantallas y LEDs se encienden mientras el puesto está ocupado (agente sentado)
   y se apagan cuando se levanta o el puesto queda vacío; apagadas quedan oscuras
   con LED rojo.
-- Manos en teclado y ratón; teclas y ratón animados al `coding`; mano a la barbilla
-  al `thinking`.
+- Manos en teclado y ratón; teclas y ratón animados solo al `coding`/`running_tool`,
+  nunca en idle. Los agentes sentados se dibujan de frente con la mirada baja hacia el
+  monitor, con `seatX + 12` para quedar centrados en el teclado; brazos y manos se
+  dibujan después del escritorio, para que alcancen teclado/ratón. El cuerpo se dibuja
+  antes de los cubículos para que el escritorio oculte la parte inferior.
 - Género: `CharacterParts.gender` o derivado del id; por defecto las mujeres usan
   pelo largo y falda al estar de pie, los hombres pelo corto y pantalón.
 - Burbujas: puntos (thinking), monitor (coding), terminal (running_tool), taza
@@ -240,7 +245,9 @@ curl.exe -X POST http://127.0.0.1:5174/api/agents/report `
 - `SessionChat` muestra una línea animada mientras el agente trabaja:
   **Pensando**, **Revisando archivos**, **Editando archivos**, **Ejecutando
   comando**, **Esperando permiso** o **Reintentando**; el estado de escena se marca
-  `busy` de forma optimista al enviar el prompt.
+  `busy` de forma optimista al enviar el prompt. La cabecera fija muestra título,
+  `id`, `padre` y `estado`; no se desplaza con los mensajes y solo cambia al elegir
+  otra sesión.
 - Mientras el estado es `thinking/coding/running_tool/error`, `OfficeCanvas` fuerza
   el puesto y cancela pausas/reuniones: el personaje no se levanta hasta quedar idle.
 - `ErrorBox` detecta el error de región de OpenCode Go, muestra un enlace directo a la

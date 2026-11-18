@@ -494,11 +494,15 @@ export default function OfficeCanvas({
       }
 
       const screens = new Array(WORKSTATIONS.length).fill(false);
+      const active = new Array(WORKSTATIONS.length).fill(false);
       for (const view of views) {
         if (!view.seated) continue;
         const state = stateRef.current.get(view.id);
         const seat = state?.placement.seat;
-        if (seat !== null && seat !== undefined) screens[seat] = true;
+        if (seat !== null && seat !== undefined) {
+          screens[seat] = true;
+          if (view.status === "coding" || view.status === "running_tool") active[seat] = true;
+        }
       }
       viewsRef.current = views;
 
@@ -533,7 +537,7 @@ export default function OfficeCanvas({
 
       ctx.translate(offsetX, offsetY);
       ctx.scale(sx, sy);
-      drawScene(ctx, layout.width, layout.height, views, now, selectedRef.current, screens, hoverRef.current, theme);
+      drawScene(ctx, layout.width, layout.height, views, now, selectedRef.current, screens, active, hoverRef.current, theme);
       frame = requestAnimationFrame(loop);
     };
 
