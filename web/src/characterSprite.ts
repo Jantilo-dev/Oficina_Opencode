@@ -458,7 +458,8 @@ export function drawPerson(ctx: CanvasRenderingContext2D, options: SpriteOptions
   const torsoTop = bodyY - (seated ? 28 : 31);
 
   rect(ctx, x - 13, baseY + 1, 26, 4, "#00000024");
-  if (look?.avatar && isImageAvatar(look.avatar) && drawAvatar(ctx, look.avatar, x - 15, headTop - 2, 30, seated ? 48 : 52)) {
+  const catAvatar = look?.avatar === "/assets/design/cat-male.png" || look?.avatar === "/assets/design/cat-female.png";
+  if (!catAvatar && look?.avatar && isImageAvatar(look.avatar) && drawAvatar(ctx, look.avatar, x - 15, headTop - 2, 30, seated ? 48 : 52)) {
     if (status === "error") rect(ctx, x - 15, headTop - 2, 30, seated ? 48 : 52, "#b3342f33");
     return;
   }

@@ -17,7 +17,7 @@ type Props = {
   name?: string;
   role?: string;
   onEdit?: () => void;
-  handoff?: { disabled: boolean; hint?: string; ready?: boolean | null; onRun: () => Promise<void> };
+  handoff?: { disabled: boolean; hint?: string; ready?: boolean | null; sent?: boolean; onRun: () => Promise<void> };
   onSend: (text: string) => Promise<void>;
   onAbort: () => Promise<void>;
   onDelete: () => Promise<void>;
@@ -101,6 +101,7 @@ export default function SessionChat({
     try {
       await handoff.onRun();
       setHandoffInfo("Plan enviado a Frontend, Backend, QA y Documentación.");
+      window.setTimeout(() => setHandoffInfo(null), 4000);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -147,7 +148,7 @@ export default function SessionChat({
           <span className="badge muted" title={session.parentID ?? "sin padre"}>
             padre {session.parentID ? session.parentID.slice(0, 8) : "—"}
           </span>
-          <span className="badge">{agent ?? "agente ?"}</span>
+          <span className="badge">{agent ?? "agente —"}</span>
           <span className="badge muted">{model ?? "modelo del agente"}</span>
           <span className={`badge ${busy ? "busy" : "idle"}`}>
             estado {busy ? busyLabel || "trabajando" : "idle"}
@@ -229,11 +230,13 @@ export default function SessionChat({
         )}
       </div>
 
-      <div className="chat-note">Actúa con los permisos de su agente: puede editar y ejecutar.</div>
+      {!handoff?.sent && (
+        <div className="chat-note">Actúa con los permisos de su agente: puede editar y ejecutar.</div>
+      )}
 
       {shownError && <ErrorBox message={shownError} action={errorAction} />}
       {handoffInfo && <div className="hint">{handoffInfo}</div>}
-      {handoff && (
+      {handoff && !handoff.sent && (
         <div className={`handoff-status ${handoff.disabled ? "disabled" : ""}`}>
           {handoff.ready === true ? (
             <span className="badge busy">JEFE LISTO PARA EL EQUIPO</span>
@@ -260,7 +263,7 @@ export default function SessionChat({
           maxLength={8000}
         />
         <div className="composer-actions">
-          {handoff ? (
+          {handoff && !handoff.sent ? (
             <button
               type="button"
               className="btn ghost"

@@ -87,6 +87,7 @@ web/
       OfficeCanvas.tsx       Asignación, movimiento, zoom/pan, hit-test
       AgentPanel.tsx         Panel retro de detalle por agente
     components/              NewSessionModal, TeamModal, ModelSelect, SessionChat, CharacterModal, GroupPanel
+    iso/                     Prototipo isométrico: projection, avatares gato, sala de equipo
     layout/LayoutEditor.tsx  Editor rompecabezas: piezas, muros/puertas, pan/zoom, JSON
     office/                  Implementación anterior (mantener tipos/preview)
 scripts/
@@ -231,6 +232,9 @@ curl.exe -X POST http://127.0.0.1:5174/api/agents/report `
   botones **+/−** hacen zoom, arrastrar hace pan, **AJUSTAR** encuadra todo y
   **LLENAR** vuelve a cubrir. El espacio libre se dibuja como zona
   **EN REPARACIÓN** con franjas de obra.
+- **Oficina ISO**: `iso/IsoTeamRoom.tsx` es un prototipo aislado en perspectiva
+  isométrica para el primer equipo completo (o cinco gatos demo). El botón
+  **OFICINA: CLÁSICA/ISO** alterna; la vista clásica sigue siendo el fallback.
 - Pantallas y LEDs se encienden mientras el puesto está ocupado (agente sentado)
   y se apagan cuando se levanta o el puesto queda vacío; apagadas quedan oscuras
   con LED rojo.
@@ -376,6 +380,8 @@ Los agentes externos son efímeros: se pierden al reiniciar el servidor.
   **PASAR PLAN** desde el chat del jefe; `runHandoff` en `App.tsx` envía el último
   texto del asistente a las otras cuatro sesiones. El botón requiere
   `LISTO PARA PASAR AL EQUIPO: SÍ` del último mensaje y que no haya pregunta pendiente.
+  Al enviar, `sentHandoffs` oculta el estado y el botón hasta que llegue otro mensaje
+  del jefe; el aviso de envío se borra solo.
 - **Personaje**: ampliar `CharacterParts`/`LOOK_PRESETS` (incluido `gender`) y su
   dibujo en `drawChibiSeated`/`drawChibiStanding`.
 - **Zoom/pan**: `zoomRef`, `panRef` y `baseViewRef` en `OfficeCanvas.tsx`; los

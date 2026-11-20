@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "tile": { "w": 32, "h": 16 },
+  "wallHeight": 96,
+  "room": {
+    "id": "team-room",
+    "name": "Sala de equipo",
+    "width": 18,
+    "height": 10,
+    "floor": "light",
+    "wall": "cream"
+  },
+  "items": [
+    { "id": "window", "type": "window", "x": 6.2, "y": 0, "width": 5.4 },
+    { "id": "sign", "type": "sign", "x": 13.4, "y": 0, "width": 4.2 },
+    { "id": "art", "type": "art", "x": 0, "y": 4.8, "width": 2.2, "rotation": 1 },
+    { "id": "rug", "type": "rug", "x": 9, "y": 6.5, "width": 7, "depth": 3.2 },
+    { "id": "cabinet", "type": "cabinet", "x": 16, "y": 6.8 },
+    { "id": "plant-a", "type": "plant", "x": 1.3, "y": 1.4 },
+    { "id": "plant-b", "type": "plant", "x": 16.2, "y": 1.4 },
+    { "id": "lamp", "type": "lamp", "x": 2.2, "y": 3.2 },
+    { "id": "trash", "type": "trash", "x": 1.3, "y": 5.4 },
+
+    { "id": "desk-main", "type": "desk", "x": 8.5, "y": 2.6, "width": 13.7, "depth": 1.25 },
+    { "id": "monitor-1", "type": "monitor", "x": 4, "y": 2.15 },
+    { "id": "monitor-2", "type": "monitor", "x": 6.4, "y": 2.15 },
+    { "id": "monitor-3", "type": "monitor", "x": 8.8, "y": 2.15 },
+    { "id": "monitor-4", "type": "monitor", "x": 11.2, "y": 2.15 },
+    { "id": "monitor-5", "type": "monitor", "x": 13.6, "y": 2.15 },
+    { "id": "chair-1", "type": "chair", "x": 4, "y": 4.55 },
+    { "id": "chair-2", "type": "chair", "x": 6.4, "y": 4.55 },
+    { "id": "chair-3", "type": "chair", "x": 8.8, "y": 4.55 },
+    { "id": "chair-4", "type": "chair", "x": 11.2, "y": 4.55 },
+    { "id": "chair-5", "type": "chair", "x": 13.6, "y": 4.55 }
+  ],
+  "seats": [
+    { "id": "seat-plan", "x": 4, "y": 4.55, "z": 18, "role": "plan", "chairId": "chair-1" },
+    { "id": "seat-frontend", "x": 6.4, "y": 4.55, "z": 18, "role": "frontend", "chairId": "chair-2" },
+    { "id": "seat-backend", "x": 8.8, "y": 4.55, "z": 18, "role": "backend", "chairId": "chair-3" },
+    { "id": "seat-qa", "x": 11.2, "y": 4.55, "z": 18, "role": "qa", "chairId": "chair-4" },
+    { "id": "seat-docs", "x": 13.6, "y": 4.55, "z": 18, "role": "docs", "chairId": "chair-5" }
+  ]
+}

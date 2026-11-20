@@ -117,7 +117,8 @@ npm start
   is sent to the other four sessions of that area. The jefe resolves the user’s
   questions and must finish each reply with **LISTO PARA PASAR AL EQUIPO: SÍ** or
   **LISTO PARA PASAR AL EQUIPO: NO**; the button stays disabled until the latest reply
-  says **SÍ** and there is no pending question. When
+  says **SÍ** and there is no pending question. After sending, the readiness block and
+  button disappear until a new jefe message; the confirmation fades after a few seconds. When
   the four roles finish, the jefe posts **“El pedido ya está hecho, favor revisar para
   seguir con lo demás.”**. When the five roles are complete,
   the team is pinned to that office: seats are locked and its members do not leave for
@@ -149,6 +150,14 @@ npm start
   the title, `id`, `padre` and `estado` fixed while messages scroll; it changes only
   when you select another chat.
 - Several sessions run in parallel, each with its own context and desk.
+
+## Isometric prototype
+
+The header button **OFICINA: CLÁSICA/ISO** switches the office view. The isometric
+prototype renders the first complete team (or a five-cat demo) in an isometric room
+with tiled floor, cutaway walls, desks, chairs, laptops, plants and a group sign.
+Click a cat to select it; use the overlay controls to zoom and fit. The classic office
+remains available and the chat/team panels do not change.
 
 ## Office editor
 
@@ -259,7 +268,7 @@ Any local process or OpenCode hook can report its state to the dashboard.
   "agentId": "ana",
   "name": "Ana",
   "status": "coding",
-  "currentTask": "Refactor de autenticaci�n",
+  "currentTask": "Refactor de autenticación",
   "file": "src/auth.ts",
   "log": "editando auth.ts"
 }

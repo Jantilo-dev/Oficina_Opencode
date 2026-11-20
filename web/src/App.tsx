@@ -28,7 +28,7 @@ import SceneCanvas from "./scene/OfficeCanvas";
 import AgentPanel from "./scene/AgentPanel";
 import { SEAT_OPTIONS, type SeatRole } from "./scene/occupancy";
 import { useAgentSync } from "./useAgentSync";
-import type { SceneAgent, SceneStatus } from "./scene/sprites";
+import { agentColors, type SceneAgent, type SceneStatus } from "./scene/sprites";
 import type { ThemeName } from "./office/sprites";
 import NewSessionModal from "./components/NewSessionModal";
 import TeamModal from "./components/TeamModal";
@@ -37,13 +37,31 @@ import ErrorBox, { isRegionError } from "./components/ErrorBox";
 import SessionChat from "./components/SessionChat";
 import GroupPanel from "./components/GroupPanel";
 import CharacterModal from "./components/CharacterModal";
-import LayoutEditor from "./layout/LayoutEditor";
+import WorldEditor from "./world3/WorldEditor";
+import WorldRoom from "./world3/WorldRoom";
+import type { IsoAgent } from "./iso/isoAvatar";
 import { type CharacterLook, loadCharacters, saveCharacters } from "./characters";
 import { displayTitle } from "./format";
 import { pendingQuestionFor } from "./chatQuestions";
 import { ROLE_BY_ID, TEAM_ROLE_DEFS, TEAM_ROLE_METHODS, JEFE_DONE_TEXT, readJefeReadiness } from "./teamRoles";
 
 const MANAGER_AGENTS = ["plan", "build"] as const;
+
+const ISO_ROLE_LABELS: Record<SeatRole, string> = {
+  plan: "Jefe",
+  frontend: "Frontend",
+  backend: "Backend",
+  qa: "QA",
+  docs: "Documentación"
+};
+
+const ISO_DEMO_AGENTS: Array<{ id: string; name: string; role: SeatRole; status: "idle" | "thinking" | "coding" | "talking" }> = [
+  { id: "demo-jefe", name: "Michi", role: "plan", status: "thinking" },
+  { id: "demo-frontend", name: "Nube", role: "frontend", status: "coding" },
+  { id: "demo-backend", name: "Tigre", role: "backend", status: "coding" },
+  { id: "demo-qa", name: "Luna", role: "qa", status: "idle" },
+  { id: "demo-docs", name: "Milo", role: "docs", status: "idle" }
+];
 
 const JEFE_PROMPT_REMINDER =
   "\n\n[ROL JEFE] No respondas que estás en modo plan ni en solo lectura. Resuelve la duda o pregunta del usuario y, si falta información, pídela. Termina siempre con una línea exacta: LISTO PARA PASAR AL EQUIPO: SÍ o LISTO PARA PASAR AL EQUIPO: NO. No implementes código.";
@@ -217,6 +235,15 @@ function latestAssistantText(messages: ChatMessage[]): string {
   return "";
 }
 
+function latestAssistantMessage(messages: ChatMessage[]): ChatMessage | undefined {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    if (textOf(message.parts).trim()) return message;
+  }
+  return undefined;
+}
+
 type HandoffCycle = {
   area: string;
   jefe: string;
@@ -252,6 +279,9 @@ export default function App() {
   const [showIndependent, setShowIndependent] = useState(
     () => window.localStorage.getItem("pixel-office-show-independent") !== "off"
   );
+  const [officeView, setOfficeView] = useState<"classic" | "iso">(
+    () => (window.localStorage.getItem("pixel-office-view") === "iso" ? "iso" : "classic")
+  );
   const [tab, setTab] = useState<"team" | "group" | "chat">("team");
   const [groupView, setGroupView] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -260,6 +290,7 @@ export default function App() {
   const [teamNotice, setTeamNotice] = useState<string | null>(null);
   const [localMessages, setLocalMessages] = useState<Record<string, ChatMessage[]>>({});
   const [handoffCycle, setHandoffCycle] = useState<HandoffCycle | null>(null);
+  const [sentHandoffs, setSentHandoffs] = useState<Record<string, string>>({});
   const [characters, setCharacters] = useState<Record<string, CharacterLook>>(loadCharacters);
   const [editingCharacter, setEditingCharacter] = useState<string | null>(null);
   const [opcDown, setOpcDown] = useState(false);
@@ -297,6 +328,14 @@ export default function App() {
     setShowIndependent((current) => {
       const next = !current;
       window.localStorage.setItem("pixel-office-show-independent", next ? "on" : "off");
+      return next;
+    });
+  };
+
+  const toggleOfficeView = () => {
+    setOfficeView((current) => {
+      const next = current === "iso" ? "classic" : "iso";
+      window.localStorage.setItem("pixel-office-view", next);
       return next;
     });
   };
@@ -976,16 +1015,16 @@ export default function App() {
   const chatBusyLabel = !selectedBusy
     ? ""
     : selectedPermission
-      ? "Esperando permiso⬦"
+      ? "Esperando permiso…"
       : selectedStatus?.type === "retry"
-        ? "Reintentando⬦"
+        ? "Reintentando…"
         : ["edit", "write", "patch", "multiedit"].includes(selectedActivity?.tool ?? "")
-          ? "Editando archivos⬦"
+          ? "Editando archivos…"
           : ["bash", "shell"].includes(selectedActivity?.tool ?? "")
-            ? "Ejecutando comando⬦"
+            ? "Ejecutando comando…"
             : ["read", "grep", "glob", "list", "webfetch"].includes(selectedActivity?.tool ?? "")
-              ? "Revisando archivos⬦"
-              : "Pensando⬦";
+              ? "Revisando archivos…"
+              : "Pensando…";
   const chatAgent = selectedIntended?.agent ?? selectedMeta?.agent;
   const canAssignManager = Boolean(
     selectedSession &&
@@ -1086,8 +1125,10 @@ export default function App() {
   const isJefeSelected = isTeamJefe || selectedSeatOption?.role === "plan";
   const planText = selected ? lastAssistantText(transcripts[selected] ?? []) : "";
   const latestJefeText = selected ? latestAssistantText(transcripts[selected] ?? []) : "";
+  const latestJefeMessage = selected ? latestAssistantMessage(transcripts[selected] ?? []) : undefined;
   const jefeReady = isJefeSelected ? readJefeReadiness(latestJefeText) : null;
   const jefePending = isJefeSelected && selected ? pendingQuestionFor(transcripts[selected] ?? []) : null;
+  const handoffSent = Boolean(selected && latestJefeMessage && sentHandoffs[selected] === latestJefeMessage.id);
   const handoffTargets = useMemo(() => {
     if (selectedTeam) {
       return TEAM_ROLE_DEFS.filter((definition) => definition.role !== "plan").flatMap(
@@ -1319,6 +1360,32 @@ export default function App() {
     return list;
   }, [officeSessions, statuses, activity, errors, permissions, transcripts, characters, meta, spawned, managerId]);
 
+  const isoTeam = selectedTeam ?? detectedTeams.teams[0];
+  const isoAgents = useMemo<IsoAgent[]>(() => {
+    if (!isoTeam) {
+      return ISO_DEMO_AGENTS.map((demo) => ({
+        id: demo.id,
+        name: demo.name,
+        role: ISO_ROLE_LABELS[demo.role],
+        status: demo.status,
+        colors: agentColors(demo.id)
+      }));
+    }
+    return TEAM_ROLE_DEFS.map((definition) => {
+      const id = isoTeam.roles.get(definition.role) ?? `demo-${definition.role}`;
+      const scene = sceneAgents.find((agent) => agent.id === `oc:${id}`);
+      return {
+        id,
+        name: characters[id]?.name?.trim() || ISO_ROLE_LABELS[definition.role],
+        role: ISO_ROLE_LABELS[definition.role],
+        status: scene?.status ?? "idle",
+        look: characters[id],
+        colors: agentColors(id)
+      };
+    });
+  }, [isoTeam, sceneAgents, characters]);
+  const isoGroupName = isoTeam ? groupNames[isoTeam.area]?.trim() || "SIN NOMBRE" : "EQUIPO DEMO";
+
   useEffect(() => {
     setExternalSelected((current) =>
       current && !liveAgents.some((agent) => `live:${agent.agentId}` === current.id) ? null : current
@@ -1521,6 +1588,9 @@ export default function App() {
     });
     if (sent.length > 0) {
       setTeamNotice(null);
+      if (latestJefeMessage) {
+        setSentHandoffs((prev) => ({ ...prev, [selected]: latestJefeMessage.id }));
+      }
       setHandoffCycle({
         area,
         jefe: selected,
@@ -1550,6 +1620,7 @@ export default function App() {
             jefeReady !== true ||
             Boolean(jefePending),
           ready: jefeReady,
+          sent: handoffSent,
           hint: !planText
             ? "Primero cierra un plan con el jefe en el chat."
             : handoffTargets.length < 4
@@ -1586,7 +1657,7 @@ export default function App() {
         <span className="sub">opencode · {boot?.directory ?? "sin directorio"}</span>
         <span className="spacer" />
         <button type="button" className="pill accent-btn" onClick={() => setModalOpen(true)}>
-          + NUEVA SESI�N
+          + NUEVA SESIÓN
         </button>
         <button type="button" className="pill theme-btn" onClick={() => setTeamModalOpen(true)}>
           CREAR EQUIPO
@@ -1607,6 +1678,14 @@ export default function App() {
           title="Mostrar u ocultar programadores individuales"
         >
           INDEP: {showIndependent ? "SÍ" : "NO"}
+        </button>
+        <button
+          type="button"
+          className="pill theme-btn"
+          onClick={toggleOfficeView}
+          title="Cambiar entre oficina clásica e isométrica"
+        >
+          OFICINA: {officeView === "iso" ? "ISO" : "CLÁSICA"}
         </button>
         <span className="pill">
           <span className={`dot ${linkClass}`} />
@@ -1663,7 +1742,7 @@ export default function App() {
                   dismissAlert(alert.id);
                 }}
               >
-                �
+                ×
               </button>
             </div>
           ))}
@@ -1672,26 +1751,30 @@ export default function App() {
 
       <div className="main">
         <div className="office">
-          <SceneCanvas
-            agents={sceneAgents}
-            theme={theme}
-            breaksEnabled={breaksEnabled}
-            groupNames={groupNames}
-            seatAssignments={seatAssignments}
-            onSeatsChange={setSeatByAgent}
-            pinnedAgents={teamPinnedAgents}
-            selectedId={externalSelected?.id ?? (selected ? `oc:${selected}` : null)}
-            onSelect={(id) => {
-              if (id.startsWith("oc:")) {
-                selectSession(id.slice(3));
-                setExternalSelected(null);
-                return;
-              }
-              const live = sceneAgents.find((agent) => agent.id === id);
-              if (live) setExternalSelected(live);
-            }}
-          />
-          {sceneAgents.length === 0 && (
+          {officeView === "iso" ? (
+            <WorldRoom theme={theme} />
+          ) : (
+            <SceneCanvas
+              agents={sceneAgents}
+              theme={theme}
+              breaksEnabled={breaksEnabled}
+              groupNames={groupNames}
+              seatAssignments={seatAssignments}
+              onSeatsChange={setSeatByAgent}
+              pinnedAgents={teamPinnedAgents}
+              selectedId={externalSelected?.id ?? (selected ? `oc:${selected}` : null)}
+              onSelect={(id) => {
+                if (id.startsWith("oc:")) {
+                  selectSession(id.slice(3));
+                  setExternalSelected(null);
+                  return;
+                }
+                const live = sceneAgents.find((agent) => agent.id === id);
+                if (live) setExternalSelected(live);
+              }}
+            />
+          )}
+          {officeView === "classic" && sceneAgents.length === 0 && (
             <div className="empty">
               {bootFailed || link === "offline" ? (
                 <>
@@ -1703,14 +1786,14 @@ export default function App() {
                 </>
               ) : !boot ? (
                 <>
-                  <h2>Conectando⬦</h2>
+                  <h2>Conectando…</h2>
                   <div>Cargando sesiones de opencode.</div>
                 </>
               ) : (
                 <>
                   <h2>La oficina está vacía</h2>
                   <div>
-                    Pulsa <code>+ NUEVA SESI�N</code> o reporta agentes con <code>/api/agents/report</code>
+                    Pulsa <code>+ NUEVA SESIÓN</code> o reporta agentes con <code>/api/agents/report</code>
                   </div>
                 </>
               )}
@@ -1739,7 +1822,7 @@ export default function App() {
               onClick={() => setTab("chat")}
               disabled={!selected}
             >
-              SESI�N
+              SESIÓN
             </button>
           </div>
 
@@ -1798,7 +1881,7 @@ export default function App() {
                     <span>id</span>
                     <b>{shortId(selectedSession.id)}</b>
                     <span>padre</span>
-                    <b>{selectedSession.parentID ? shortId(selectedSession.parentID) : "�"}</b>
+                    <b>{selectedSession.parentID ? shortId(selectedSession.parentID) : "—"}</b>
                     <span>estado</span>
                     <b>{selectedStatus?.type ?? "idle"}</b>
                     <span>método</span>
@@ -1827,7 +1910,7 @@ export default function App() {
                       }}
                     />
                     <span>tokens</span>
-                    <b>{selectedMeta?.tokens ?? "�"}</b>
+                    <b>{selectedMeta?.tokens ?? "—"}</b>
                     <span>directorio</span>
                     <b>{selectedSession.directory}</b>
                     <span>manager</span>
@@ -1911,7 +1994,7 @@ export default function App() {
                   Haz clic en un personaje o en una fila para ver el detalle.
                   <br />
                   <br />
-                  Usa <b>+ NUEVA SESI�N</b> para crear un agente y darle instrucciones.
+                  Usa <b>+ NUEVA SESIÓN</b> para crear un agente y darle instrucciones.
                 </div>
               )}
             </>
@@ -1977,7 +2060,7 @@ export default function App() {
         />
       )}
 
-      {layoutOpen && <LayoutEditor onClose={() => setLayoutOpen(false)} />}
+      {layoutOpen && <WorldEditor onClose={() => setLayoutOpen(false)} />}
 
       {editingCharacter && sessions[editingCharacter] && (
         <CharacterModal

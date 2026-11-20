@@ -1,0 +1,14 @@
+{
+  "version": 3,
+  "tile": { "w": 32, "h": 16 },
+  "wallHeight": 96,
+  "room": {
+    "id": "office-empty",
+    "name": "Oficina central",
+    "width": 28,
+    "height": 20,
+    "floor": "blue",
+    "wall": "cream"
+  },
+  "items": []
+}

@@ -1048,7 +1048,7 @@ function drawBubble(ctx: Ctx, agent: AgentView, t: number) {
 
 function drawNameplate(ctx: Ctx, agent: AgentView, selected: boolean) {
   ctx.font = "bold 10px ui-monospace, Consolas, monospace";
-  const label = agent.name.length > 22 ? `${agent.name.slice(0, 21)}⬦` : agent.name;
+  const label = agent.name.length > 22 ? `${agent.name.slice(0, 21)}…` : agent.name;
   const width = ctx.measureText(label).width + 18;
   const y = agent.y - 58;
   rect(ctx, agent.x - width / 2 - 2, y - 14, width + 4, 20, selected ? "#f2c24a" : "#252c36");
@@ -1064,7 +1064,7 @@ type Box = { x: number; y: number; w: number; h: number };
 
 function nameplateBox(ctx: Ctx, agent: AgentView): Box {
   ctx.font = "bold 10px ui-monospace, Consolas, monospace";
-  const label = agent.name.length > 22 ? `${agent.name.slice(0, 21)}⬦` : agent.name;
+  const label = agent.name.length > 22 ? `${agent.name.slice(0, 21)}…` : agent.name;
   const width = ctx.measureText(label).width + 18;
   return { x: agent.x - width / 2 - 2, y: agent.y - 72, w: width + 4, h: 20 };
 }
@@ -1112,7 +1112,7 @@ export function drawScene(
 
   const receptionist: AgentView = {
     id: "reception",
-    name: "RECEPCI�N",
+    name: "RECEPCIÓN",
     status: "idle",
     logs: [],
     x: RECEPTION_DESK.seatX,

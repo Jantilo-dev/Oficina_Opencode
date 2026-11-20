@@ -1,0 +1,72 @@
+import type { AssetDefinition, OfficeItemType } from "./schema";
+
+export const DESIGN_SHEETS = {
+  office: "/assets/design/office.png",
+  furniture: "/assets/design/furniture.png",
+  coffee: "/assets/design/coffee.png",
+  water: "/assets/design/water.png",
+  deskSingle: "/assets/design/desk-single-separated.png",
+  deskSingleBack: "/assets/design/desk-single-separated-back.png",
+  deskDual: "/assets/design/desk-dual-separated.png",
+  deskDualBack: "/assets/design/desk-dual-separated-back.png",
+  deskDouble: "/assets/design/desk-two-screens-separated.png",
+  deskDoubleBack: "/assets/design/desk-two-screens-separated-back.png",
+  printer: "/assets/design/printer.png",
+  meetingTable: "/assets/design/meeting-table.png",
+  plant: "/assets/design/plant.png",
+  whiteboard: "/assets/design/whiteboard.png",
+  armchair: "/assets/design/armchair.png",
+  chairSeparated: "/assets/design/chair-separated.png",
+  chairSeparatedBack: "/assets/design/chair-separated-back.png",
+  wall1: "/assets/design/wall-1.png",
+  wall2: "/assets/design/wall-2.png",
+  cats: "/assets/design/cats.png",
+  catMale: "/assets/design/iso-cat.svg",
+  catFemale: "/assets/design/iso-cat-female.svg",
+  catMaleSeated: "/assets/design/iso-cat-seated.svg",
+  catFemaleSeated: "/assets/design/iso-cat-female-seated.svg",
+  catMaleSeatedBack: "/assets/design/iso-cat-seated-back.svg",
+  catFemaleSeatedBack: "/assets/design/iso-cat-female-seated-back.svg"
+} as const;
+
+export const ASSETS: Record<OfficeItemType, AssetDefinition> = {
+  desk: { type: "desk", label: "Escritorio", width: 2.6, depth: 1.25, height: 22, layer: "middle", collision: true },
+  chair: { type: "chair", label: "Silla ergonómica", width: 0.9, depth: 0.9, height: 42, layer: "front" },
+  monitor: { type: "monitor", label: "Monitor", width: 0.68, depth: 0.28, height: 32, layer: "front" },
+  pc: { type: "pc", label: "Torre PC", width: 0.45, depth: 0.45, height: 34, layer: "front" },
+  lamp: { type: "lamp", label: "Lámpara", width: 0.45, depth: 0.45, height: 34, layer: "front" },
+  plant: { type: "plant", label: "Planta", width: 0.8, depth: 0.8, height: 40, layer: "front" },
+  cabinet: { type: "cabinet", label: "Archivador", width: 1.5, depth: 1.0, height: 42, layer: "middle", collision: true },
+  printer: { type: "printer", label: "Impresora", width: 1.5, depth: 1.2, height: 28, layer: "middle", collision: true },
+  sofa: { type: "sofa", label: "Sofá", width: 3.2, depth: 1.1, height: 24, layer: "middle", collision: true },
+  table: { type: "table", label: "Mesa de reuniones", width: 4.6, depth: 2.1, height: 22, layer: "middle", collision: true },
+  meetingChair: { type: "meetingChair", label: "Silla de reunión", width: 0.8, depth: 0.8, height: 38, layer: "front" },
+  water: { type: "water", label: "Dispensador de agua", width: 0.6, depth: 0.6, height: 40, layer: "front", collision: true },
+  coffee: { type: "coffee", label: "Cafetera", width: 0.7, depth: 0.55, height: 24, layer: "front" },
+  trash: { type: "trash", label: "Papelera", width: 0.45, depth: 0.45, height: 18, layer: "front" },
+  recycle: { type: "recycle", label: "Reciclaje", width: 0.7, depth: 0.65, height: 24, layer: "front" },
+  whiteboard: { type: "whiteboard", label: "Pizarra", width: 3.2, depth: 0.12, height: 40, layer: "wall" },
+  cork: { type: "cork", label: "Corcho", width: 2.2, depth: 0.12, height: 26, layer: "wall" },
+  art: { type: "art", label: "Cuadro", width: 1.3, depth: 0.12, height: 20, layer: "wall" },
+  window: { type: "window", label: "Ventanal", width: 4.2, depth: 0.12, height: 46, layer: "wall" },
+  partition: { type: "partition", label: "Mampara", width: 4, depth: 0.16, height: 52, layer: "middle" },
+  rug: { type: "rug", label: "Alfombra", width: 5.5, depth: 3.2, height: 0, layer: "floor" },
+  books: { type: "books", label: "Libros", width: 0.4, depth: 0.4, height: 12, layer: "front" },
+  box: { type: "box", label: "Caja", width: 0.7, depth: 0.55, height: 18, layer: "front" },
+  cup: { type: "cup", label: "Taza", width: 0.2, depth: 0.2, height: 6, layer: "front" },
+  paper: { type: "paper", label: "Papeles", width: 0.5, depth: 0.35, height: 1, layer: "front" },
+  light: { type: "light", label: "Luz de techo", width: 2.8, depth: 0.4, height: 10, layer: "ceiling" },
+  wall1: { type: "wall1", label: "Pared acristalada", width: 4, depth: 0.2, height: 42, layer: "wall", collision: true },
+  wall2: { type: "wall2", label: "Pared panel", width: 4, depth: 0.2, height: 38, layer: "wall", collision: true },
+  catMale: { type: "catMale", label: "Gato ISO", width: 0.9, depth: 0.9, height: 40, layer: "front" },
+  catFemale: { type: "catFemale", label: "Gatita ISO", width: 0.9, depth: 0.9, height: 40, layer: "front" }
+};
+
+export const LAYER_ORDER: Record<AssetDefinition["layer"], number> = {
+  floor: 0,
+  wall: 1,
+  back: 2,
+  middle: 3,
+  front: 4,
+  ceiling: 5
+};
